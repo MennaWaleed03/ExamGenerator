@@ -1,0 +1,53 @@
+/* smooth animation */
+#sidebar {
+  transition: width .2s ease, padding .2s ease, margin .2s ease;
+  white-space: nowrap;
+}
+
+/* collapse: override inline width */
+#sidebar.sidebar-collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+/* hide the vertical divider when sidebar collapsed */
+#sidebar.sidebar-collapsed + .b-example-divider {
+  display: none !important;
+}
+#sidebar { width: 280px; }
+
+
+.course-card {
+  cursor: pointer;
+  transition: 
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.course-card:hover {
+  background-color: rgba(13, 110, 253, 0.05); /* Bootstrap primary, very light */
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+  transform: translateY(-3px);
+}
+.course-card:focus-within {
+  outline: 2px solid rgba(13, 110, 253, 0.35);
+  outline-offset: 2px;
+}
+.fab-create-course{
+  width: 52px;
+  height: 52px;
+  right: 18px;
+  bottom: 110px; /* above theme toggle */
+  z-index: 1600; /* above everything */
+}
+
+.modal-dialog-scrollable .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 1rem;
+  scrollbar-width: thin;          /* Firefox */
+}
