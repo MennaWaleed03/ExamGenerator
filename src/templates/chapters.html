@@ -1,0 +1,212 @@
+{% extends "layout.html" %}
+{% block content %} 
+  <table style="width:98% ;"  class="mx-auto mt-5 table table-striped table-bordered text-center ">
+              <thead>
+            <tr>
+              <th scope="col">Chapter Number</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last Updated</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+        {% for chapter in chapters %}
+          <tr>
+            <th scope="row">{{ loop.index }}</th>   {# starts from 1 #}
+           
+
+            <td>
+                {% if chapter.completed %}
+                <span class="badge bg-success">Completed</span>
+                {% else %}
+                <span class="badge bg-danger">Not completed</span>
+                {% endif %}
+            </td>
+
+           <td>{{ chapter.updated_at.strftime('%Y-%m-%d') }}</td>
+
+            <td>
+                <a data-bs-toggle="tooltip" 
+                data-bs-title="view questions" 
+                class="btn btn-primary btn-sm" href="#">
+                <i class="bi bi-eye"></i>
+                </a>
+                 
+              <a class="btn btn-secondary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#AddQuestionsModal"
+                href="javascript:void(0)">
+                <i class="bi bi-pencil"></i>
+                </a>
+                                
+                <button data-bs-toggle="tooltip" 
+                data-bs-title="Delete chapter" 
+                 class="btn btn-danger btn-sm">
+                <i class="bi bi-trash"></i>
+                </button>
+            </td>
+            </tr>
+            {% else %}
+            <tr>
+            <td colspan="5" class="text-center text-muted">
+                No chapters for this course yet.
+            </td>
+          </tr>
+        {% endfor %}
+
+    </tbody>
+</table>
+        <a href="#" 
+        class="ms-5 mt-3 btn btn-primary rounded-circle position-fixed d-flex align-items-center justify-content-center shadow fab-create-course "
+        data-bs-toggle="modal"
+        data-bs-target="#"
+        title="Add Chapter">
+        <i class="bi bi-plus-lg fs-4"></i>
+        </a>
+
+<!-- Add Questions Modal -->
+<!-- Add Questions Modal -->
+<div class="modal fade" id="AddQuestionsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Add Questions</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="addQuestionsForm">
+        <div class="modal-body">
+
+          {# 6 sections definition #}
+          {% set sections = [
+            {"diff":"easy", "diff_label":"Easy", "diff_badge":"bg-success",
+             "lvl":"remembering", "lvl_label":"Remembering", "lvl_badge":"bg-primary"},
+            {"diff":"easy", "diff_label":"Easy", "diff_badge":"bg-success",
+             "lvl":"understanding", "lvl_label":"Understanding", "lvl_badge":"bg-info"},
+            {"diff":"easy", "diff_label":"Easy", "diff_badge":"bg-success",
+             "lvl":"creativity", "lvl_label":"Creativity", "lvl_badge":"bg-warning text-dark"},
+
+            {"diff":"difficult", "diff_label":"Difficult", "diff_badge":"bg-danger",
+             "lvl":"remembering", "lvl_label":"Remembering", "lvl_badge":"bg-primary"},
+            {"diff":"difficult", "diff_label":"Difficult", "diff_badge":"bg-danger",
+             "lvl":"understanding", "lvl_label":"Understanding", "lvl_badge":"bg-info"},
+            {"diff":"difficult", "diff_label":"Difficult", "diff_badge":"bg-danger",
+             "lvl":"creativity", "lvl_label":"Creativity", "lvl_badge":"bg-warning text-dark"}
+          ] %}
+
+          {% for s in sections %}
+            {% set block_id = "q_" ~ s.diff ~ "_" ~ s.lvl %}
+
+            <!-- Section header -->
+            <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+              <div class="fw-semibold">
+                <span class="badge {{ s.diff_badge }} me-2">{{ s.diff_label }}</span>
+                <span class="badge {{ s.lvl_badge }}">{{ s.lvl_label }}</span>
+              </div>
+
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      data-q-toggle
+                      data-target="#{{ block_id }}">
+                <i class="bi bi-caret-down-fill"></i>
+              </button>
+            </div>
+
+            <!-- Collapsible block -->
+            <div id="{{ block_id }}" class="d-none border rounded p-3 mb-3">
+
+              {% for q in [1,2] %}
+                <div class="border rounded p-3 mb-3">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="fw-semibold">Question {{ q }}</div>
+                    <small class="text-muted">{{ s.diff_label }} · {{ s.lvl_label }}</small>
+                  </div>
+
+                  <!-- Question content -->
+                  <div class="mb-3">
+                    <label class="form-label">Content</label>
+                    <input class="form-control"
+                           name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_text"
+                           placeholder="Write the question here...">
+                  </div>
+
+                  <!-- Choices (3) + correct -->
+                  <div class="mb-2">
+                    <label class="form-label">Choices (select the correct one)</label>
+
+                    {% for opt in ["A","B","C"] %}
+                      <div class="input-group mb-2">
+                        <div class="input-group-text">
+                          <input class="form-check-input mt-0"
+                                 type="radio"
+                                 name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_correct"
+                                 value="{{ opt }}">
+                        </div>
+                        <span class="input-group-text">{{ opt }}</span>
+                        <input type="text"
+                               class="form-control"
+                               name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_{{ opt }}"
+                               placeholder="Choice {{ opt }}">
+                      </div>
+                    {% endfor %}
+
+                  </div>
+                </div>
+              {% endfor %}
+
+            </div>
+          {% endfor %}
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="discardQuestionsBtn" class="btn btn-outline-danger">Discard</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-primary">Submit</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+
+
+{% endblock content %} 
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-q-toggle]");
+    if (!btn) return;
+
+    const box = document.querySelector(btn.dataset.target);
+    if (!box) return;
+
+    const icon = btn.querySelector("i.bi");
+    const willOpen = box.classList.contains("d-none");
+
+    box.classList.toggle("d-none");
+
+    if (icon) {
+      icon.classList.toggle("bi-caret-down-fill", !willOpen);
+      icon.classList.toggle("bi-caret-up-fill", willOpen);
+    }
+  });
+
+  const discardBtn = document.getElementById("discardQuestionsBtn");
+  const form = document.getElementById("addQuestionsForm");
+
+  discardBtn?.addEventListener("click", () => form?.reset());
+
+  form?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const payload = Object.fromEntries(new FormData(form));
+    console.log(payload);
+  });
+});
+</script>
+{% endblock scripts %}
+
