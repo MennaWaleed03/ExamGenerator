@@ -1,27 +1,32 @@
-// create_course.js (UPDATED: View + Edit + Delete with modals + pagination)
-console.log("create_course.js LOADED ✅ version = 2026-01-30 A");
+// static/js/create_course.js
+console.log("create_course.js LOADED ✅ version = 2026-01-30 FIXED-2 (bfcache + no-store)");
+
 document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("coursesGrid");
   const pager = document.getElementById("coursesPager");
   const form = document.getElementById("createCourseForm");
 
-  // Edit modal elements
+  if (!grid || !pager || !form) {
+    console.warn("Missing required elements: coursesGrid/coursesPager/createCourseForm");
+    return;
+  }
+
+  // Modals
   const editModalEl = document.getElementById("editCourseModal");
   const editForm = document.getElementById("editCourseForm");
   const editIdEl = document.getElementById("editCourseId");
   const editNameEl = document.getElementById("editCourseName");
   const editChaptersEl = document.getElementById("editCourseChapters");
 
-  // Delete modal elements
   const deleteModalEl = document.getElementById("deleteCourseModal");
   const deleteIdEl = document.getElementById("deleteCourseId");
   const deleteNameEl = document.getElementById("deleteCourseName");
   const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
 
-  // Safety checks (so file doesn’t crash if a modal is missing)
   const hasEditModal = !!(editModalEl && editForm && editIdEl && editNameEl && editChaptersEl);
   const hasDeleteModal = !!(deleteModalEl && deleteIdEl && deleteNameEl && confirmDeleteBtn);
 
+  // state
   let courses = Array.isArray(window.__courses) ? window.__courses : [];
   let page = 1;
   const pageSize = 6;
@@ -48,7 +53,6 @@ document.addEventListener("DOMContentLoaded", () => {
   function render() {
     clampPage();
 
-    // render grid
     const start = (page - 1) * pageSize;
     const items = courses.slice(start, start + pageSize);
 
@@ -58,43 +62,32 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="p-4 text-center border rounded">No courses yet.</div>
         </div>`;
     } else {
-        grid.innerHTML = items.map(c => `
+      grid.innerHTML = items.map((c) => `
         <div class="col-12 col-md-4">
-            <div class="card h-100 shadow-sm course-card cursor-pointer"
-                data-course-id="${c.id}">
+          <div class="card h-100 shadow-sm course-card cursor-pointer" data-course-id="${c.id}">
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title">${escapeHtml(c.name)}</h5>
-                <p class="card-text mb-3">
-                Chapters: ${escapeHtml(c.number_of_chapters)}
-                </p>
+              <h5 class="card-title">${escapeHtml(c.name)}</h5>
+              <p class="card-text mb-3">Chapters: ${escapeHtml(c.number_of_chapters)}</p>
 
-                <div class="mt-auto d-flex gap-2">
-                <a href="#"
-                    class="btn btn-outline-primary btn-sm flex-fill">
-                    Generate Exam
-                </a>
+              <div class="mt-auto d-flex gap-2">
+                <a href="#" class="btn btn-outline-primary btn-sm flex-fill" onclick="return false;">Show Exams</a>
 
-                <button class="btn btn-outline-secondary btn-sm flex-fill"
-                        data-action="edit"
-                        data-id="${c.id}">
-                    Rename
+                <button class="btn btn-outline-secondary btn-sm flex-fill" data-action="edit" data-id="${c.id}">
+                  Rename
                 </button>
 
-                <button class="btn btn-outline-danger btn-sm flex-fill"
-                        data-action="delete"
-                        data-id="${c.id}">
-                    Delete
+                <button class="btn btn-outline-danger btn-sm flex-fill" data-action="delete" data-id="${c.id}">
+                  Delete
                 </button>
-                </div>
+              </div>
             </div>
-            </div>
+          </div>
         </div>
-        `).join("");
+      `).join("");
     }
 
-    // render pager
+    // pager
     pager.innerHTML = "";
-
     const tp = totalPages();
     const prevDisabled = page === 1 ? "disabled" : "";
     const nextDisabled = page === tp ? "disabled" : "";
@@ -102,10 +95,8 @@ document.addEventListener("DOMContentLoaded", () => {
     pager.innerHTML += `
       <li class="page-item ${prevDisabled}">
         <a class="page-link" href="#" data-page="${page - 1}">Previous</a>
-      </li>
-    `;
+      </li>`;
 
-    // page numbers (window of 5)
     const windowSize = 5;
     let startP = Math.max(1, page - Math.floor(windowSize / 2));
     let endP = Math.min(tp, startP + windowSize - 1);
@@ -115,29 +106,62 @@ document.addEventListener("DOMContentLoaded", () => {
       pager.innerHTML += `
         <li class="page-item ${p === page ? "active" : ""}">
           <a class="page-link" href="#" data-page="${p}">${p}</a>
-        </li>
-      `;
+        </li>`;
     }
 
     pager.innerHTML += `
       <li class="page-item ${nextDisabled}">
         <a class="page-link" href="#" data-page="${page + 1}">Next</a>
-      </li>
-    `;
+      </li>`;
   }
-    grid.addEventListener("click", (e) => {
-    // Ignore clicks on buttons or links
-    if (e.target.closest("button, a")) return;
 
+  // ✅ THIS is the important fix: bypass caching
+  async function refreshCoursesFromServer() {
+    const url = `/courses/api?t=${Date.now()}`; // cache buster
+
+    const res = await fetch(url, {
+      method: "GET",
+      cache: "no-store", // 👈 prevents cached responses
+      headers: {
+        "Accept": "application/json",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+    });
+
+    if (!res.ok) {
+      console.warn("Failed to refresh courses from server.", res.status);
+      return;
+    }
+
+    const data = await res.json().catch(() => []);
+    courses = Array.isArray(data) ? data : [];
+    render();
+  }
+
+  // render instantly then refresh
+  render();
+  refreshCoursesFromServer();
+
+  // ✅ bfcache fix: update when coming back
+  window.addEventListener("pageshow", (e) => {
+    // when using Back button, persisted is often true
+    if (e.persisted) {
+      refreshCoursesFromServer();
+    }
+  });
+
+  // navigation to chapters
+  grid.addEventListener("click", (e) => {
+    if (e.target.closest("button, a")) return;
     const card = e.target.closest(".course-card");
     if (!card) return;
-
     const courseId = card.dataset.courseId;
     if (!courseId) return;
+    window.location.href = `/courses/${encodeURIComponent(courseId)}/chapters`;
+  });
 
-    window.location.href = `/courses/${courseId}/chapters`;
-    });
-  // --- Pager click ---
+  // pager click
   pager.addEventListener("click", (e) => {
     const a = e.target.closest("a[data-page]");
     if (!a) return;
@@ -148,59 +172,35 @@ document.addEventListener("DOMContentLoaded", () => {
     render();
   });
 
-  // --- Card buttons (View/Edit/Delete) via event delegation ---
+  // open edit/delete modals
   grid.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-action]");
     if (!btn) return;
 
     const action = btn.dataset.action;
     const id = btn.dataset.id;
-
     const course = courses.find((c) => String(c.id) === String(id));
     if (!course) return;
 
-    if (action === "view") {
-      window.location.href = `/chapters?course_id=${encodeURIComponent(id)}`;
-      return;
-    }
-
     if (action === "edit") {
-      if (!hasEditModal) {
-        alert("Edit modal is missing in HTML (editCourseModal).");
-        return;
-      }
-      openEditModal(course);
+      if (!hasEditModal) return alert("Edit modal missing in HTML.");
+      editIdEl.value = course.id;
+      editNameEl.value = course.name ?? "";
+      editChaptersEl.value = course.number_of_chapters ?? 1;
+      bootstrap.Modal.getOrCreateInstance(editModalEl).show();
       return;
     }
 
     if (action === "delete") {
-      if (!hasDeleteModal) {
-        alert("Delete modal is missing in HTML (deleteCourseModal).");
-        return;
-      }
-      openDeleteModal(course);
+      if (!hasDeleteModal) return alert("Delete modal missing in HTML.");
+      deleteIdEl.value = course.id;
+      deleteNameEl.textContent = course.name ?? "";
+      bootstrap.Modal.getOrCreateInstance(deleteModalEl).show();
       return;
     }
   });
 
-  // --- Edit modal helpers ---
-  function openEditModal(course) {
-    editIdEl.value = course.id;
-    editNameEl.value = course.name ?? "";
-    editChaptersEl.value = course.number_of_chapters ?? 1;
-
-    bootstrap.Modal.getOrCreateInstance(editModalEl).show();
-  }
-
-  // --- Delete modal helpers ---
-  function openDeleteModal(course) {
-    deleteIdEl.value = course.id;
-    deleteNameEl.textContent = course.name ?? "";
-
-    bootstrap.Modal.getOrCreateInstance(deleteModalEl).show();
-  }
-
-  // --- Create course ---
+  // create course
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -219,30 +219,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    courses.unshift(data);
-
-    // close modal and reset
-    const modalEl = document.getElementById("exampleModal");
-    bootstrap.Modal.getInstance(modalEl)?.hide();
+    bootstrap.Modal.getInstance(document.getElementById("exampleModal"))?.hide();
     form.reset();
 
-    page = 1;
-    render();
+    await refreshCoursesFromServer();
   });
 
-  // --- Submit edit (PATCH /courses/{id}) ---
+  // edit
   if (hasEditModal) {
     editForm.addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const id = editIdEl.value;
       const name = editNameEl.value.trim();
-      const number_of_chapters = parseInt(editChaptersEl.value, 10);
 
       const res = await fetch(`/courses/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, number_of_chapters }),
+        body: JSON.stringify({ name }),
       });
 
       const data = await res.json().catch(() => null);
@@ -251,41 +245,33 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Update local state with returned course object
-      const idx = courses.findIndex((c) => String(c.id) === String(id));
-      if (idx !== -1) courses[idx] = data;
-
       bootstrap.Modal.getInstance(editModalEl)?.hide();
-      render();
+      await refreshCoursesFromServer();
     });
   }
 
-  // --- Confirm delete (DELETE /courses/{id}) ---
+  // delete
   if (hasDeleteModal) {
     confirmDeleteBtn.addEventListener("click", async () => {
       const id = deleteIdEl.value;
 
-      const res = await fetch(`/courses/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(`/courses/${encodeURIComponent(id)}`, { method: "DELETE" });
 
-      const data = await res.json().catch(() => null);
+      let data = null;
+      if (res.status !== 204) data = await res.json().catch(() => null);
+
       if (!res.ok) {
+        if (res.status === 404) {
+          bootstrap.Modal.getInstance(deleteModalEl)?.hide();
+          await refreshCoursesFromServer();
+          return;
+        }
         alert(data?.detail || "Failed to delete course");
         return;
       }
 
-      // Remove from local state
-      courses = courses.filter((c) => String(c.id) !== String(id));
-
-      // If current page becomes empty, move back
-      clampPage();
-
       bootstrap.Modal.getInstance(deleteModalEl)?.hide();
-      render();
+      await refreshCoursesFromServer();
     });
   }
-
-  // initial render
-  render();
 });
