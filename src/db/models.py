@@ -1,10 +1,11 @@
 from sqlalchemy import Table,Column, Integer, String, Boolean, ForeignKey,UUID, DateTime,Enum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from src.db.main import Base
-from datetime import datetime,UTC
+
 import uuid
 from sqlalchemy.sql import func
-from src.enums import ObjectiveEnum,DifficultyEnum
+from src.enums import ObjectiveEnum,DifficultyEnum,ExamStatus
 
 
 exam_question_table = Table(
@@ -84,6 +85,8 @@ class Exam(Base):
 
     id= Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,index=True)
 
+    status = Column(Enum(ExamStatus),nullable=False,default=ExamStatus.draft)#type:ignore
+    constraints=Column(JSONB,nullable=False)
     course_id=Column(UUID,ForeignKey("courses.id"),nullable=False)
 
     created_at= Column( DateTime(timezone=True),

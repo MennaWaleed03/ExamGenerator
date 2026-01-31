@@ -1,9 +1,12 @@
-from fastapi import APIRouter,Depends,status,Request
+from fastapi import APIRouter,Depends,status,Request,Response
+from typing import List
 from src.db.main import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from schemas import CourseCreateModel,CourseResponseModel,CourseEditModel
+from schemas import CourseCreateModel,CourseResponseModel,CourseEditModel,ChapterResponseModel,ExamDetailsRequestModel,QuestionResponseModel,ExamResponseModel
 from src.services.CourseService import course_service
+from src.services.ChapterService import chapter_service
+from src.services.ExamService import exam_service
 from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -60,9 +63,9 @@ async def delete_course(course_id:UUID,session:AsyncSession=Depends(get_session)
 
 @courses_router.get("/{course_id}/chapters")
 async def get_course_chapters(request:Request,course_id:UUID,session:AsyncSession=Depends(get_session)):
-
+    course=await course_service.get_course_by_id(course_id=course_id,session=session)
     try:
-        chapters=await course_service.get_course_chapters(course_id,session)
+        chapters=await chapter_service.get_course_chapters(course_id,session)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
     return templates.TemplateResponse(
@@ -70,12 +73,36 @@ async def get_course_chapters(request:Request,course_id:UUID,session:AsyncSessio
         {
             "request": request,
             "chapters": chapters,
-            "course_id": course_id
+             "course_id": str(course_id),
+             "course_name":course.name
+             
         }
     )
 
+@courses_router.post("/{course_id}/chapters",response_model=ChapterResponseModel)
+async def create_chapter(course_id:UUID,session:AsyncSession=Depends(get_session)):
+
+        chapter=await chapter_service.create_new_chapter(course_id=course_id,session=session)
+        return chapter
 
 
+@courses_router.post('/{course_id}/Exam',response_model=ExamResponseModel)
+async def generate_exam(course_id:UUID,exam_details:ExamDetailsRequestModel,session:AsyncSession=Depends(get_session)):
+    generated_exam= await exam_service.generate_exam(course_id=course_id,exam_constraints=exam_details,session=session)
+    return generated_exam
+
+
+@courses_router.post('/api/{course_id}/Exam',response_model=ExamResponseModel)
+async def generate_exam_test(course_id:UUID,exam_details:ExamDetailsRequestModel,session:AsyncSession=Depends(get_session)):
+    generated_exam= await exam_service.generate_exam(course_id=course_id,exam_constraints=exam_details,session=session)
+    return  generated_exam
+
+@courses_router.post('/api/{course_id}/exams/{exam_id}/regenerate',response_model=ExamResponseModel)
+async def regenerate_exam(course_id:UUID,exam_id:UUID,session:AsyncSession=Depends(get_session)):
+    regenerated_exam=await exam_service.regenerate_exam(course_id=course_id,exam_id=exam_id,session=session)
+    if not regenerated_exam:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Something went wrong please try again later")
+    return regenerated_exam
 
 
 
@@ -85,17 +112,21 @@ async def get_course_chapters(request:Request,course_id:UUID,session:AsyncSessio
 async def get_all_course_chapters(request:Request,course_id:UUID,session:AsyncSession=Depends(get_session)):
 
     try:
-        chapters=await course_service.get_course_chapters(course_id,session)
+        chapters=await chapter_service.get_course_chapters(course_id,session)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
     return chapters
 
 
-@courses_router.get("/api")
-async def get_all_courses(session:AsyncSession=Depends(get_session)):
-    courses=await course_service.get_all_courses(session)
-    return courses
 
+    
+@courses_router.get("/api", response_model=list[CourseResponseModel])
+async def courses_api(response:Response,session: AsyncSession = Depends(get_session)):
+
+    response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return await course_service.get_all_courses(session)
 
 @courses_router.get("/api/{course_id}")
 async def get_course_by_id(course_id:UUID,session:AsyncSession=Depends(get_session)):
