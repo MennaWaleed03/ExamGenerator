@@ -13,7 +13,7 @@ templates = Jinja2Templates(directory="src/templates")
 
 exams_router=APIRouter()
 
-@exams_router.delete('/{exam_id}')
+@exams_router.delete('/{exam_id}',status_code=status.HTTP_200_OK)
 async def delete_exam(exam_id:UUID,session:AsyncSession=Depends(get_session)):
     result= await exam_service.delete_exam(exam_id=exam_id,session=session)
     if not result:
@@ -26,3 +26,18 @@ async def save_exam(exam_id:UUID,session:AsyncSession=Depends(get_session)):
     if not exam:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Couldn't save the exams")
     return exam
+
+@exams_router.get('/{exam_id}/questions')
+async def get_exam_questions(request:Request,exam_id:UUID,session=Depends(get_session)):
+
+    data=await exam_service.get_exam_questions(exam_id=exam_id,session=session)
+    return templates.TemplateResponse(
+        "exam_questions.html",
+        {
+            "request": request,
+            "exam_questions": data,
+            "exam_id": str(exam_id),
+    
+        
+             
+        })

@@ -86,10 +86,42 @@ async def create_chapter(course_id:UUID,session:AsyncSession=Depends(get_session
         return chapter
 
 
+
+
+
 @courses_router.post('/{course_id}/Exam',response_model=ExamResponseModel)
 async def generate_exam(course_id:UUID,exam_details:ExamDetailsRequestModel,session:AsyncSession=Depends(get_session)):
     generated_exam= await exam_service.generate_exam(course_id=course_id,exam_constraints=exam_details,session=session)
     return generated_exam
+
+
+@courses_router.get('/{course_id}/exams',include_in_schema=False)
+async def get_course_exams(request:Request,course_id:UUID,session:AsyncSession=Depends(get_session)):
+
+    exams= await exam_service.get_course_exams(course_id=course_id,session=session)
+    course=await course_service.get_course_by_id(course_id=course_id,session=session)
+    return templates.TemplateResponse(
+        "exams.html",
+        {
+            "request": request,
+            "exams_data": exams,
+            "course_id": str(course_id),
+            "course_name":course.name
+        
+             
+        })
+
+
+
+
+
+#Test End Points
+
+@courses_router.get('/api/{course_id}/exams')
+async def get_course_exams_api(course_id:UUID,session:AsyncSession=Depends(get_session)):
+
+    exams= await exam_service.get_course_exams(course_id=course_id,session=session)
+    return exams if exams else []
 
 
 @courses_router.post('/api/{course_id}/Exam',response_model=ExamResponseModel)

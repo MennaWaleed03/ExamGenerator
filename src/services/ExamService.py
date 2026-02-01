@@ -9,8 +9,17 @@ from uuid import UUID
 from schemas import QuestionResponseModel,ExamDetailsRequestModel
 from sqlalchemy import insert,select,delete
 from src.enums import ExamStatus
+from sqlalchemy.orm import selectinload
+from src.services.CourseService import course_service
 
 class ExamService:
+
+    def _enum_to_text(self,x):
+        if x is None:
+            return None
+        # if it's an Enum instance
+        return getattr(x, "value", str(x))
+
 
 
     async def get_exam_by_id(self,exam_id:UUID,session:AsyncSession):
@@ -24,7 +33,7 @@ class ExamService:
 
         total_objective_questions=4*total_chapters_number
         total_difficulty_questions=6*total_chapters_number
-        if (exam_constraints.creative_questions> total_objective_questions) or(exam_constraints.understanding_questions>total_objective_questions) or(exam_constraints.remembring_questions>total_chapters_number) or(exam_constraints.difficult_questions>total_difficulty_questions)or(exam_constraints.simple_questions>total_difficulty_questions):
+        if (exam_constraints.creative_questions> total_objective_questions) or(exam_constraints.understanding_questions>total_objective_questions) or(exam_constraints.remembring_questions>total_objective_questions) or(exam_constraints.difficult_questions>total_difficulty_questions)or(exam_constraints.simple_questions>total_difficulty_questions):
             raise  HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid input numbers")
         total_questions=total_chapters_number *exam_constraints.questions_per_chapter
 
@@ -32,7 +41,7 @@ class ExamService:
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="the number of qustions per chapter shouldn't excced 12")
 
         if (exam_constraints.difficult_questions+exam_constraints.simple_questions) !=total_questions:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of difficult and simple questions must eqult the total required questiosn")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of difficult and simple questions must equl the total required questiosn")
         
         if (exam_constraints.remembring_questions+exam_constraints.understanding_questions+exam_constraints.creative_questions) !=total_questions:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of questions of different objectives must eqult the total required questiosn")
@@ -46,7 +55,7 @@ class ExamService:
         if not chapters:
             return [],0
         num_of_chapters=len(chapters)
-        p
+    
         required_exam_valid= await self.validate_number_of_questions(total_chapters_number=num_of_chapters,exam_constraints=exam_constraints,session=session)
 
 
@@ -119,18 +128,64 @@ class ExamService:
         return exam
 
 
+    async def get_course_exams(self,course_id:UUID,session:AsyncSession):
+        data:list=[]
+        statment=select(Exam).where(Exam.course_id==course_id ).where(Exam.status == ExamStatus.final).options(selectinload(Exam.questions)).order_by(Exam.updated_at.asc())
+        result=await session.execute(statement=statment)
+        exams=result.scalars().all()
+       
+        for exam in exams:
+            data.append({
+                "exam_id":exam.id,
+                "updated_at":exam.updated_at,
+                "exam_status":exam.status,
+                "course_id":exam.course_id,
+                "difficult_count":sum(1 for q in exam.questions if q.difficulty == "difficult"),
+
+                "simple_count":sum(1 for q in exam.questions if q.difficulty=="simple"),
+
+                "remembering_count":sum(1 for q in exam.questions if q.objective=="remembering"),
+
+                "creative_count":sum(1 for q in exam.questions if q.objective=="creativity"),
+
+                "understanding_count":sum(1 for q in exam.questions if q.objective=="understanding")
+            })
+            
+
+        return data
 
     async def delete_exam(self,exam_id:UUID,session:AsyncSession):
         exam=await self.get_exam_by_id(exam_id=exam_id,session=session)
+        if exam.status==ExamStatus.draft:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The user can't delete a draft exam it's the system job")
         if exam:
             await session.delete(exam)
             await session.commit()
             return True
         return False
 
-
-
+    async def get_exam_questions(self,exam_id:UUID,session:AsyncSession):
+        exam=await self.get_exam_by_id(exam_id=exam_id,session=session)
+        if not exam or exam.status==ExamStatus.draft:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Can't access this exam")
+        questions_ids_stms=select(exam_question_table.c.question_id).where(exam_question_table.c.exam_id==exam_id)
+        questions_ids_res= await session.execute(questions_ids_stms)
+        questions_ids= questions_ids_res.scalars().all()
+        if not questions_ids:
+            return []
         
+        question_stms=select(Question).where(Question.id.in_(questions_ids)).options(selectinload(Question.choices))
+        questions_res=await session.execute(question_stms)
+        questions=questions_res.scalars().all()
+        
+
+
+
+        for q in questions:
+            q.difficulty = self._enum_to_text(q.difficulty)
+            q.objective  = self._enum_to_text(q.objective)
+
+        return questions
 
 
 exam_service=ExamService()
