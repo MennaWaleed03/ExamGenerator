@@ -171,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // TODO: implement in backend:
   // PATCH /{course_id}/exams/{exam_id} { exam_status: "final" }
  async function apiSaveExam(examId) {
-  const url = `/exams/${encodeURIComponent(examId)}`;
+  const url = `${window.location.origin}/exams/${encodeURIComponent(examId)}`;;
 
   const res = await fetch(url, {
     method: "PATCH",
@@ -281,7 +281,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnSave.disabled = true;
 
     try {
-      await apiSaveExam(courseId, examId);
+      await apiSaveExam( examId);
       // Optionally update UI
       examStatusEl.textContent = "final";
       setError(resultErrEl, "");

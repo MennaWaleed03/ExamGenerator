@@ -1,5 +1,5 @@
 // static/js/create_course.js
-console.log("create_course.js LOADED ✅ version = 2026-01-30 FIXED-2 (bfcache + no-store)");
+console.log("create_course.js LOADED ✅ version = 2026-02-01 SHOW-EXAMS-FIX");
 
 document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("coursesGrid");
@@ -62,6 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="p-4 text-center border rounded">No courses yet.</div>
         </div>`;
     } else {
+      // IMPORTANT: Show Exams is now a data-action link handled by JS (prevents /courses#)
       grid.innerHTML = items.map((c) => `
         <div class="col-12 col-md-4">
           <div class="card h-100 shadow-sm course-card cursor-pointer" data-course-id="${c.id}">
@@ -70,7 +71,10 @@ document.addEventListener("DOMContentLoaded", () => {
               <p class="card-text mb-3">Chapters: ${escapeHtml(c.number_of_chapters)}</p>
 
               <div class="mt-auto d-flex gap-2">
-                <a href="#" class="btn btn-outline-primary btn-sm flex-fill" onclick="return false;">Show Exams</a>
+                <a href="/courses/${encodeURIComponent(c.id)}/exams"
+                  class="btn btn-outline-primary btn-sm flex-fill show-exams-link">
+                  Show Exams
+                </a>
 
                 <button class="btn btn-outline-secondary btn-sm flex-fill" data-action="edit" data-id="${c.id}">
                   Rename
@@ -115,13 +119,13 @@ document.addEventListener("DOMContentLoaded", () => {
       </li>`;
   }
 
-  // ✅ THIS is the important fix: bypass caching
+  // ✅ bypass caching
   async function refreshCoursesFromServer() {
     const url = `/courses/api?t=${Date.now()}`; // cache buster
 
     const res = await fetch(url, {
       method: "GET",
-      cache: "no-store", // 👈 prevents cached responses
+      cache: "no-store",
       headers: {
         "Accept": "application/json",
         "Cache-Control": "no-cache",
@@ -145,13 +149,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ✅ bfcache fix: update when coming back
   window.addEventListener("pageshow", (e) => {
-    // when using Back button, persisted is often true
-    if (e.persisted) {
-      refreshCoursesFromServer();
-    }
+    if (e.persisted) refreshCoursesFromServer();
   });
 
-  // navigation to chapters
+  // ✅ SHOW EXAMS FIX (must be BEFORE card navigation)
+  grid.addEventListener("click", (e) => {
+    const a = e.target.closest('a[data-action="show-exams"]');
+    if (!a) return;
+
+    e.preventDefault();     // prevents /courses#
+    e.stopPropagation();    // prevents card click handler
+    const courseId = a.dataset.id;
+    if (!courseId) return;
+
+    window.location.href = `/courses/${encodeURIComponent(courseId)}/exams`;
+  });
+
+  // navigation to chapters (clicking on card body)
   grid.addEventListener("click", (e) => {
     if (e.target.closest("button, a")) return;
     const card = e.target.closest(".course-card");
