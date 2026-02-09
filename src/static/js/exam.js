@@ -7,9 +7,9 @@ document.addEventListener("DOMContentLoaded", () => {
      Format exam dates
      ========================= */
   document.querySelectorAll(".exam-date[data-iso]").forEach((el) => {
-    const iso = el.getAttribute("data-iso");
+    const iso = el.dataset.iso;
     const d = new Date(iso);
-    if (!isNaN(d.getTime())) {
+    if (!Number.isNaN(d.getTime())) {
       el.textContent = d.toLocaleString();
     }
   });
@@ -42,17 +42,37 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "DELETE",
         });
 
+      const deleteModalEl = document.getElementById("deleteExamModal");
+      if (deleteModalEl) {
+        const modal = bootstrap.Modal.getOrCreateInstance(deleteModalEl);
+        modal.hide();
+      }
         if (!res.ok) {
-          alert("Failed to delete exam");
+          await Swal.fire({
+          icon: "error",
+          title: "Oops...",
+          text: "Failed to delete the exam!",
+        });
           return;
         }
 
+       await Swal.fire({
+        icon: "success",
+        title: "Deleted!",
+        text: "Exam deleted successfully",
+        timer: 1200,
+        showConfirmButton: false,
+      });
         // Simple & reliable
         window.location.reload();
 
       } catch (err) {
         console.error("Delete exam error:", err);
-        alert("Unexpected error while deleting exam");
+       await Swal.fire({
+        icon: "error",
+        title: "Unexpected error",
+        text: "Unexpected error while deleting exam.",
+      });
       }
     });
   }

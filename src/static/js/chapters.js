@@ -1,10 +1,5 @@
-// static/js/chapters.js
-console.log("chapters.js LOADED ✅ version = 2026-01-31 FIXED-3 (nested payload)");
-
 document.addEventListener("DOMContentLoaded", () => {
-  // =========================
-  // Tooltips (safe)
-  // =========================
+
   function initTooltips(scope = document) {
     try {
       scope.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
@@ -14,12 +9,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   initTooltips();
 
-  // =========================
-  // Refs
-  // =========================
   const addQuestionsModalEl = document.getElementById("AddQuestionsModal");
   const addQuestionsForm = document.getElementById("addQuestionsForm");
   const discardQuestionsBtn = document.getElementById("discardQuestionsBtn");
+
+  // Dynamic questions UI refs
+  const questionsContainer = document.getElementById("questionsContainer");
+  const questionCardTemplate = document.getElementById("questionCardTemplate");
+  const btnAddQuestion = document.getElementById("btnAddQuestion");
 
   const deleteChapterModalEl = document.getElementById("deleteChapterModal");
   const deleteChapterIdEl = document.getElementById("deleteChapterId");
@@ -30,36 +27,106 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeChapterId = null;
   let isSubmitting = false;
 
+  const MAX_QUESTIONS = 50;
+  const objectiveSet = new Set(["remembering", "understanding", "creativity"]);
+  const difficultySet = new Set(["simple", "difficult"]);
+
   // =========================
-  // Collapse/expand blocks inside modal
+  // Helpers: dynamic cards
   // =========================
+  function getCards() {
+    return [...(questionsContainer?.querySelectorAll(".question-card") ?? [])];
+  }
+
+  function updateCardNumbers() {
+    const cards = getCards();
+    cards.forEach((card, idx) => {
+      const n = idx + 1;
+      const numEl = card.querySelector(".q-number");
+      if (numEl) numEl.textContent = n;
+
+      // Store index for payload
+      card.dataset.qIndex = String(idx);
+
+      // IMPORTANT: make radio "name" unique per question so they don't interfere
+      const radioName = `q${idx}_correct`;
+      card.querySelectorAll('input.q-correct[type="radio"]').forEach(r => {
+        r.name = radioName;
+      });
+    });
+  }
+
+  function addQuestionCard(prefill = null) {
+    if (!questionsContainer || !questionCardTemplate) return;
+
+    const count = getCards().length;
+    if (count >= MAX_QUESTIONS) {
+      alert(`Maximum is ${MAX_QUESTIONS} questions.`);
+      return;
+    }
+
+    const node = questionCardTemplate.content.cloneNode(true);
+    const card = node.querySelector(".question-card");
+    if (!card) return;
+
+    // Apply prefill if provided
+    if (prefill) {
+      const diffSel = card.querySelector(".q-difficulty");
+      const objSel = card.querySelector(".q-objective");
+      const textIn = card.querySelector(".q-text");
+      if (diffSel && prefill.difficulty) diffSel.value = prefill.difficulty;
+      if (objSel && prefill.objective) objSel.value = prefill.objective;
+      if (textIn && prefill.content) textIn.value = prefill.content;
+
+      const choiceInputs = card.querySelectorAll(".q-choice");
+      choiceInputs.forEach(inp => {
+        const k = inp.dataset.choice;
+        if (k && prefill.choices?.[k] != null) inp.value = prefill.choices[k];
+      });
+
+      if (prefill.correct) {
+        const r = card.querySelector(`input.q-correct[value="${prefill.correct}"]`);
+        if (r) r.checked = true;
+      }
+    }
+
+    questionsContainer.appendChild(node);
+    updateCardNumbers();
+  }
+
+  function resetQuestionsUI() {
+    if (!questionsContainer) return;
+    questionsContainer.innerHTML = "";
+    addQuestionCard(); // start with 1 card
+    addQuestionsForm?.classList.remove("was-validated");
+  }
+
+  // Add button
+  btnAddQuestion?.addEventListener("click", () => addQuestionCard());
+
+  // Remove button (event delegation)
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-q-toggle]");
+    const btn = e.target.closest(".btnRemoveQuestion");
     if (!btn) return;
 
-    const target = btn.dataset.target;
-    if (!target) return;
+    const card = btn.closest(".question-card");
+    if (!card) return;
 
-    const box = document.querySelector(target);
-    if (!box) return;
-
-    const icon = btn.querySelector("i.bi");
-    const willOpen = box.classList.contains("d-none");
-
-    box.classList.toggle("d-none");
-
-    if (icon) {
-      icon.classList.toggle("bi-caret-down-fill", !willOpen);
-      icon.classList.toggle("bi-caret-up-fill", willOpen);
+    // Keep at least 1 question
+    const cards = getCards();
+    if (cards.length <= 1) {
+      alert("At least one question is required.");
+      return;
     }
+
+    card.remove();
+    updateCardNumbers();
   });
 
-  // =========================
-  // Discard (clear everything)
-  // =========================
+  // Discard (clear everything back to 1 question)
   discardQuestionsBtn?.addEventListener("click", () => {
     addQuestionsForm?.reset();
-    addQuestionsForm?.classList.remove("was-validated");
+    resetQuestionsUI();
   });
 
   // =========================
@@ -146,10 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (action === "generate-questions") {
       e.preventDefault();
 
-      if (actionEl.classList.contains("disabled") || actionEl.getAttribute("aria-disabled") === "true") {
-        return;
-      }
-
       const chapterId = actionEl.dataset.chapterId;
       if (!chapterId) return;
 
@@ -172,122 +235,63 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =========================
-  // Helpers: build nested payload from form
+  // Build payload from dynamic cards
   // =========================
-
-  // Map UI values to API enums if needed
-  // If your backend expects "easy"/"difficult", set these to identity.
-  // If it expects "simple"/"difficult", map easy -> simple as below.
-  const difficultyMap = {
-    easy: "simple",
-    difficult: "difficult",
-  };
-
-  const objectiveSet = new Set(["remembering", "understanding", "creativity"]);
-
-  // Parse names like: easy_remembering_q1_text, difficult_creativity_q2_B, ... etc.
-  function parseFieldName(name) {
-    // expected: {diff}_{lvl}_q{n}_{field}
-    const m = /^([a-z]+)_([a-z]+)_q([12])_(text|A|B|C|correct)$/.exec(name);
-    if (!m) return null;
-    return {
-      diff: m[1],
-      lvl: m[2],
-      q: parseInt(m[3], 10),
-      field: m[4],
-    };
-  }
-
-  // Build questions list in the exact order:
-  // 1) easy remembering q1,q2
-  // 2) easy understanding q1,q2
-  // 3) easy creativity q1,q2
-  // 4) difficult remembering q1,q2
-  // 5) difficult understanding q1,q2
-  // 6) difficult creativity q1,q2
-  function buildPayloadFromForm(formEl) {
-    const fd = new FormData(formEl);
-
-    // Structure:
-    // buckets[diff][lvl][q] = { text, A, B, C, correct }
-    const buckets = {};
-
-    for (const [name, valueRaw] of fd.entries()) {
-      const info = parseFieldName(name);
-      if (!info) continue;
-
-      const value = String(valueRaw ?? "").trim();
-
-      buckets[info.diff] ??= {};
-      buckets[info.diff][info.lvl] ??= {};
-      buckets[info.diff][info.lvl][info.q] ??= { text: "", A: "", B: "", C: "", correct: "" };
-
-      buckets[info.diff][info.lvl][info.q][info.field] = value;
-    }
-
-    // Now flatten into API payload
-    const order = [
-      ["easy", "remembering"],
-      ["easy", "understanding"],
-      ["easy", "creativity"],
-      ["difficult", "remembering"],
-      ["difficult", "understanding"],
-      ["difficult", "creativity"],
-    ];
+  function buildPayloadFromCards() {
+    const cards = getCards();
+    if (cards.length < 1) throw new Error("Please add at least one question.");
+    if (cards.length > MAX_QUESTIONS) throw new Error(`Max is ${MAX_QUESTIONS} questions.`);
 
     const questions = [];
 
-    for (const [diff, lvl] of order) {
-      if (!objectiveSet.has(lvl)) throw new Error(`Invalid objective: ${lvl}`);
+    for (const card of cards) {
+      const content = (card.querySelector(".q-text")?.value ?? "").trim();
+      const difficulty = (card.querySelector(".q-difficulty")?.value ?? "").trim();
+      const objective = (card.querySelector(".q-objective")?.value ?? "").trim();
 
-      for (const qn of [1, 2]) {
-        const row = buckets?.[diff]?.[lvl]?.[qn];
-        if (!row) {
-          throw new Error(`Missing fields for ${diff}_${lvl}_q${qn}`);
-        }
+      if (!content) throw new Error("Some question content is empty.");
+      if (!difficultySet.has(difficulty)) throw new Error(`Invalid difficulty: ${difficulty}`);
+      if (!objectiveSet.has(objective)) throw new Error(`Invalid objective: ${objective}`);
 
-        const mappedDifficulty = difficultyMap[diff] ?? diff;
+      const A = (card.querySelector('.q-choice[data-choice="A"]')?.value ?? "").trim();
+      const B = (card.querySelector('.q-choice[data-choice="B"]')?.value ?? "").trim();
+      const C = (card.querySelector('.q-choice[data-choice="C"]')?.value ?? "").trim();
 
-        const correct = row.correct; // "A" or "B" or "C"
-        if (!["A", "B", "C"].includes(correct)) {
-          throw new Error(`Select the correct choice for ${diff} / ${lvl} / Q${qn}`);
-        }
+      if (!A || !B || !C) throw new Error("Each question must have choices A, B, and C.");
 
-        questions.push({
-          content: row.text,
-          difficulty: mappedDifficulty,
-          objective: lvl,
-          choices: [
-            { content: row.A, is_correct: correct === "A" },
-            { content: row.B, is_correct: correct === "B" },
-            { content: row.C, is_correct: correct === "C" },
-          ],
-        });
-      }
-    }
+      const correctEl = card.querySelector('input.q-correct[type="radio"]:checked');
+      const correct = correctEl?.value ?? "";
+      if (!["A", "B", "C"].includes(correct)) throw new Error("Select the correct choice for every question.");
 
-    if (questions.length !== 12) {
-      throw new Error("You must submit exactly 12 questions.");
+      questions.push({
+        content,
+        difficulty,
+        objective,
+        choices: [
+          { content: A, is_correct: correct === "A" },
+          { content: B, is_correct: correct === "B" },
+          { content: C, is_correct: correct === "C" },
+        ],
+      });
     }
 
     return { questions };
   }
 
   // Strong validation:
-  // - HTML required check
-  // - plus: ensure each radio group has a selection (safety)
-  function validateQuestionsForm(formEl) {
+  // - HTML5 checkValidity()
+  // - plus: ensure each card has checked correct answer
+  function validateDynamicForm(formEl) {
+    // HTML constraints
     if (!formEl.checkValidity()) {
       formEl.classList.add("was-validated");
       return false;
     }
 
-    const radioGroups = [...new Set(
-      [...formEl.querySelectorAll('input[type="radio"][name$="_correct"]')].map(r => r.name)
-    )];
-
-    for (const name of radioGroups) {
-      const checked = formEl.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`);
+    // Ensure each card has a checked radio
+    const cards = getCards();
+    for (const card of cards) {
+      const checked = card.querySelector('input.q-correct[type="radio"]:checked');
       if (!checked) {
         alert("Please select the correct choice for every question.");
         return false;
@@ -295,43 +299,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     return true;
-  }
-
-  // Update row UI after success
-  function markChapterCompletedUI(chapterId) {
-    const row = document.querySelector(`tr[data-chapter-row-id="${CSS.escape(String(chapterId))}"]`);
-    if (!row) return;
-
-    // Status badge cell (2nd column)
-    const tds = row.querySelectorAll("td");
-    const statusCell = tds[0];
-    const dateCell = tds[1];
-
-    if (statusCell) {
-      statusCell.innerHTML = `<span class="badge bg-success">Completed</span>`;
-    }
-
-    if (dateCell) {
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, "0");
-      const dd = String(now.getDate()).padStart(2, "0");
-      dateCell.textContent = `${yyyy}-${mm}-${dd}`;
-    }
-
-    // Disable generate button
-    const genBtn = row.querySelector('[data-action="generate-questions"][data-generate-btn="1"]');
-    if (genBtn) {
-      genBtn.classList.add("disabled");
-      genBtn.setAttribute("aria-disabled", "true");
-      genBtn.setAttribute("tabindex", "-1");
-      genBtn.setAttribute("data-bs-title", "Questions already generated");
-
-      try {
-        bootstrap.Tooltip.getInstance(genBtn)?.dispose();
-      } catch {}
-      initTooltips(row);
-    }
   }
 
   // =========================
@@ -346,11 +313,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (isSubmitting) return;
 
-    if (!validateQuestionsForm(addQuestionsForm)) return;
+    if (!validateDynamicForm(addQuestionsForm)) return;
 
     let payload;
     try {
-      payload = buildPayloadFromForm(addQuestionsForm);
+      payload = buildPayloadFromCards();
     } catch (err) {
       alert(err?.message || "Invalid form data.");
       return;
@@ -379,17 +346,19 @@ document.addEventListener("DOMContentLoaded", () => {
       bootstrap.Modal.getInstance(addQuestionsModalEl)?.hide();
     } catch {}
 
-    // Reset only after success (Discard is for clearing anytime)
+    // Reset after success
     addQuestionsForm.reset();
-    addQuestionsForm.classList.remove("was-validated");
-
-    // Update UI
-    markChapterCompletedUI(activeChapterId);
+    resetQuestionsUI();
 
     activeChapterId = null;
     isSubmitting = false;
- 
 
     alert("Questions submitted successfully ✅");
+    window.location.reload();
   });
+
+  // Initialize modal UI once (in case modal is opened without clicking generate)
+  if (questionsContainer && questionCardTemplate) {
+    resetQuestionsUI();
+  }
 });

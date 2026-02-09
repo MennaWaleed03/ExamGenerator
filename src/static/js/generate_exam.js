@@ -1,12 +1,16 @@
-// static/js/exams.js
-console.log("exams.js LOADED ✅ version = 2026-02-01");
+// static/js/generate_exam.js
+console.log("generate_exam.js LOADED ✅ version = 2026-02-09 FIX-REGENERATE+TOTALS+ORDER+PAYLOAD");
 
 document.addEventListener("DOMContentLoaded", () => {
   // -------------------------
-  // Refs
+  // Globals from template
   // -------------------------
   const courseId = window.__courseId ?? null;
+  const totalChapters = Number(window.__totalChapters ?? 0);
 
+  // -------------------------
+  // Refs (DOM)
+  // -------------------------
   const btnOpen = document.getElementById("btnOpenGenerateExamModal");
 
   const generateModalEl = document.getElementById("generateExamModal");
@@ -18,11 +22,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const resultModalEl = document.getElementById("generatedExamModal");
   const resultBodyEl = document.getElementById("generatedExamBody");
   const resultErrEl = document.getElementById("generatedExamError");
-  const examIdEl = document.getElementById("generatedExamId");
   const examStatusEl = document.getElementById("generatedExamStatus");
 
   const btnRegenerate = document.getElementById("btnRegenerateExam");
   const btnSave = document.getElementById("btnSaveExam");
+
+  // Totals UI refs (must exist in HTML)
+  const requiredTotalText = document.getElementById("requiredTotalText");
+  const difficultyTotalText = document.getElementById("difficultyTotalText");
+  const objectiveTotalText = document.getElementById("objectiveTotalText");
+  const totalsMismatchText = document.getElementById("totalsMismatchText");
 
   if (!courseId) {
     console.warn("window.__courseId is missing. Exam generation disabled.");
@@ -30,7 +39,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  if (!generateForm) {
+    console.error("generateExamForm not found in DOM.");
+    return;
+  }
+
+  // -------------------------
+  // Form input refs
+  // -------------------------
+  const qpEl = generateForm.querySelector('input[name="questions_per_chapter"]');
+
+  const diffEl = generateForm.querySelector('input[name="difficult_questions"]');
+  const simpleEl = generateForm.querySelector('input[name="simple_questions"]');
+
+  const remEl = generateForm.querySelector('input[name="remembering_questions"]');
+  const undEl = generateForm.querySelector('input[name="understanding_questions"]');
+  const creEl = generateForm.querySelector('input[name="creative_questions"]');
+
+  // -------------------------
   // Bootstrap helpers
+  // -------------------------
   function showModal(modalEl) {
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
@@ -41,14 +69,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // -------------------------
   // State
   // -------------------------
-  let lastConstraints = null;   // keep constraints for regenerate
-  let currentExam = null;       // last response: { exam_id, exam_status, questions }
+  let lastConstraints = null;
+  let currentExam = null;
   let isGenerating = false;
   let isSaving = false;
-  let regenerateCount = 0;      // client-side display only
 
   // -------------------------
-  // Small UI helpers
+  // Helpers
   // -------------------------
   function setError(el, msg) {
     if (!el) return;
@@ -77,10 +104,106 @@ document.addEventListener("DOMContentLoaded", () => {
       .replaceAll("'", "&#039;");
   }
 
-  // Render exam in the result modal
+  function n(v) {
+    const x = Number(v);
+    return Number.isFinite(x) ? x : 0;
+  }
+
+  // -------------------------
+  // Dynamic Totals UI
+  // -------------------------
+  function updateTotalsUI() {
+    const qpc = n(qpEl?.value);
+    const required = qpc * totalChapters;
+
+    const diffTotal = n(diffEl?.value) + n(simpleEl?.value);
+    const objTotal  = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
+
+    if (requiredTotalText) requiredTotalText.textContent = String(required);
+    if (difficultyTotalText) difficultyTotalText.textContent = String(diffTotal);
+    if (objectiveTotalText) objectiveTotalText.textContent = String(objTotal);
+
+    let msg = "";
+    if (required > 0) {
+      if (diffTotal !== required) msg += `Difficulty total must equal ${required}. `;
+      if (objTotal !== required) msg += `Objective total must equal ${required}.`;
+    }
+
+    if (totalsMismatchText) {
+      if (msg.trim()) {
+        totalsMismatchText.textContent = msg.trim();
+        totalsMismatchText.classList.remove("d-none");
+      } else {
+        totalsMismatchText.textContent = "";
+        totalsMismatchText.classList.add("d-none");
+      }
+    }
+  }
+
+  ["input", "change"].forEach(evt => {
+    qpEl?.addEventListener(evt, updateTotalsUI);
+    diffEl?.addEventListener(evt, updateTotalsUI);
+    simpleEl?.addEventListener(evt, updateTotalsUI);
+    remEl?.addEventListener(evt, updateTotalsUI);
+    undEl?.addEventListener(evt, updateTotalsUI);
+    creEl?.addEventListener(evt, updateTotalsUI);
+  });
+
+  updateTotalsUI();
+
+  // -------------------------
+  // Summary renderer
+  // -------------------------
+  function renderSummary(exam, constraints) {
+    const summaryEl = document.getElementById("generatedExamSummary");
+    if (!summaryEl) return;
+
+    const diff = exam?.diff_counts || {};
+    const obj  = exam?.obj_counts  || {};
+
+    const reqSimple = Number(constraints?.simple_questions ?? 0);
+    const reqDiff   = Number(constraints?.difficult_questions ?? 0);
+
+    const reqRem = Number(constraints?.remembering_questions ?? 0);
+    const reqUnd = Number(constraints?.understanding_questions ?? 0);
+    const reqCre = Number(constraints?.creative_questions ?? 0);
+
+    const genSimple = Number(diff.simple ?? 0);
+    const genDiff   = Number(diff.difficult ?? 0);
+
+    const genRem = Number(obj.remembering ?? 0);
+    const genUnd = Number(obj.understanding ?? 0);
+    const genCre = Number(obj.creativity ?? 0);
+
+    const badge = (gen, req) => {
+      const ok = gen === req;
+      return `<span class="badge ${ok ? "bg-success" : "bg-warning text-dark"}">${gen}/${req}</span>`;
+    };
+
+    summaryEl.innerHTML = `
+      <div class="border rounded p-2">
+        <div class="fw-semibold mb-2">Summary (generated / required)</div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <span class="text-muted">Difficulty:</span>
+          <span>Simple ${badge(genSimple, reqSimple)}</span>
+          <span>Difficult ${badge(genDiff, reqDiff)}</span>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+          <span class="text-muted">Objective:</span>
+          <span>Remembering ${badge(genRem, reqRem)}</span>
+          <span>Understanding ${badge(genUnd, reqUnd)}</span>
+          <span>Creativity ${badge(genCre, reqCre)}</span>
+        </div>
+      </div>
+    `;
+  }
+
   function renderExam(exam) {
     if (!exam) return;
 
+    renderSummary(exam, lastConstraints);
 
     const questions = Array.isArray(exam.questions) ? exam.questions : [];
     if (questions.length === 0) {
@@ -97,7 +220,6 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="text-muted small text-end">
               <div>Difficulty: ${escapeHtml(q.difficulty)}</div>
               <div>Objective: ${escapeHtml(q.objective)}</div>
-              </div>
             </div>
           </div>
 
@@ -106,7 +228,6 @@ document.addEventListener("DOMContentLoaded", () => {
               <li>
                 ${escapeHtml(c.content)}
                 ${c.is_correct ? `<span class="badge bg-success ms-2">correct</span>` : ``}
-                
               </li>
             `).join("")}
           </ol>
@@ -118,23 +239,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // -------------------------
-  // Collect constraints from form -> payload for API
+  // Payload builder
   // -------------------------
   function getConstraintsPayload() {
     const fd = new FormData(generateForm);
 
-    // IMPORTANT: names here match your ExamDetailsRequestModel fields
-    // (you wrote remembring_questions with that spelling, so we keep it)
     const payload = {
       questions_per_chapter: Number(fd.get("questions_per_chapter")),
       difficult_questions: Number(fd.get("difficult_questions")),
       simple_questions: Number(fd.get("simple_questions")),
-      remembring_questions: Number(fd.get("remembring_questions")),
+      remembering_questions: Number(fd.get("remembering_questions")),
       understanding_questions: Number(fd.get("understanding_questions")),
       creative_questions: Number(fd.get("creative_questions")),
     };
 
-    // hard validation (numbers + non-negative + integers)
     for (const [k, v] of Object.entries(payload)) {
       if (!Number.isFinite(v)) throw new Error(`${k} must be a number.`);
       if (v < 0) throw new Error(`${k} must be >= 0.`);
@@ -151,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // API calls
   // -------------------------
   async function apiGenerateExam(constraints) {
-    const url = `/courses/${encodeURIComponent(courseId)}/Exam`;
+    const url = `/courses/${encodeURIComponent(courseId)}/exam`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -160,55 +278,80 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const data = await res.json().catch(() => null);
-
     if (!res.ok) {
-      const msg = data?.detail || data?.message || "Failed to generate exam.";
+      const msg = data?.detail || data?.message || `Failed to generate exam (HTTP ${res.status}).`;
       throw new Error(msg);
     }
     return data;
   }
 
-  // TODO: implement in backend:
-  // PATCH /{course_id}/exams/{exam_id} { exam_status: "final" }
- async function apiSaveExam(examId) {
-  const url = `${window.location.origin}/exams/${encodeURIComponent(examId)}`;;
+  // ✅ IMPORTANT: adjust this endpoint to match YOUR backend route
+  // Most common:
+  //   POST /exams/{exam_id}/regenerate
+  async function apiRegenerateExam(examId) {
+    const url = `/courses/${encodeURIComponent(courseId)}/exams/${encodeURIComponent(examId)}/regenerate`;
 
-  const res = await fetch(url, {
-    method: "PATCH",
-    headers: { "Accept": "application/json" },
-  });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Accept": "application/json" },
+    });
 
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    const msg = data?.detail || data?.message || `Failed to save exam (HTTP ${res.status}).`;
-    throw new Error(msg);
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = data?.detail || data?.message || `Failed to regenerate exam (HTTP ${res.status}).`;
+      throw new Error(msg);
+    }
+    return data;
   }
 
-  return data;
-}
+  async function apiSaveExam(examId) {
+    const url = `/exams/${encodeURIComponent(examId)}`;
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Accept": "application/json" },
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const msg = data?.detail || data?.message || `Failed to save exam (HTTP ${res.status}).`;
+      throw new Error(msg);
+    }
+    return data;
+  }
 
   // -------------------------
   // Events
   // -------------------------
   btnOpen?.addEventListener("click", () => {
     setError(generateErrorEl, "");
-    generateForm?.reset();
-    generateForm?.classList.remove("was-validated");
+    generateForm.reset();
+    generateForm.classList.remove("was-validated");
+    updateTotalsUI();
     showModal(generateModalEl);
   });
 
-  generateForm?.addEventListener("submit", async (e) => {
+  generateForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     setError(generateErrorEl, "");
 
-    // HTML validation
+    updateTotalsUI();
+
     if (!generateForm.checkValidity()) {
       generateForm.classList.add("was-validated");
       return;
     }
-
     if (isGenerating) return;
+
+    // block submit if totals mismatch
+    const required = n(qpEl?.value) * totalChapters;
+    const diffTotal = n(diffEl?.value) + n(simpleEl?.value);
+    const objTotal  = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
+
+    if (required > 0 && (diffTotal !== required || objTotal !== required)) {
+      setError(generateErrorEl, "Totals mismatch: Difficulty/Objectives must equal the required total.");
+      return;
+    }
 
     let constraints;
     try {
@@ -222,10 +365,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     try {
       const exam = await apiGenerateExam(constraints);
-      // Must match ExamResponseModel: { exam_id, exam_status, questions }
+
       currentExam = exam;
       lastConstraints = constraints;
-      regenerateCount = 0;
 
       renderExam(currentExam);
 
@@ -239,25 +381,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ✅ REGENERATE handler (you were missing this)
   btnRegenerate?.addEventListener("click", async () => {
     setError(resultErrEl, "");
+
     if (isGenerating) return;
 
-    if (!lastConstraints) {
-      setError(resultErrEl, "Missing constraints. Please generate again.");
+    const examId = currentExam?.exam_id ?? currentExam?.id ?? null;
+    if (!examId) {
+      setError(resultErrEl, "Missing exam_id. Generate an exam first.");
       return;
     }
-
-
 
     setLoadingGenerating(true);
 
     try {
-      const exam = await apiGenerateExam(lastConstraints);
-      currentExam = exam;
-      regenerateCount += 1;
-
-      renderExam(currentExam);
+      const newExam = await apiRegenerateExam(examId);
+      currentExam = newExam;
+      renderExam(currentExam);   // uses lastConstraints for summary
 
     } catch (err) {
       setError(resultErrEl, err?.message || "Failed to regenerate exam.");
@@ -270,21 +411,18 @@ document.addEventListener("DOMContentLoaded", () => {
     setError(resultErrEl, "");
     if (isSaving) return;
 
-    const examId = currentExam?.exam_id;
+    const examId = currentExam?.exam_id ?? currentExam?.id ?? null;
     if (!examId) {
       setError(resultErrEl, "Missing exam_id. Generate again.");
       return;
     }
 
-    // If you don’t have the PATCH endpoint yet, comment this out
     isSaving = true;
     btnSave.disabled = true;
 
     try {
-      await apiSaveExam( examId);
-      // Optionally update UI
-      examStatusEl.textContent = "final";
-      setError(resultErrEl, "");
+      await apiSaveExam(examId);
+      if (examStatusEl) examStatusEl.textContent = "final";
       alert("Exam saved ✅");
       hideModal(resultModalEl);
 
