@@ -1,34 +1,40 @@
 from src.services.ChapterService import chapter_service
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from src.db.models import Question,Choice
+from sqlalchemy import select,update
+from src.db.models import Question,Choice,Chapter
 from fastapi.exceptions import HTTPException
 from fastapi import status
 from uuid import UUID
 from schemas import QuestionRequestModel,QuestionEditModel
-from collections import defaultdict
-from sqlalchemy.orm import selectinload
 
+from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import func
  
 class QuestionService:
 
         
     async def validate_questions(self,questions:QuestionRequestModel,session:AsyncSession):
+        unique_questions=set()
+        
 
-        difficulty_count:dict = defaultdict(int)
-        objective_count :dict= defaultdict(int)
 
         for question in questions.questions:
 
             q = question.model_dump()
-            difficulty_count[q["difficulty"]] += 1
-            objective_count[q["objective"]] += 1
 
-        if len(set(difficulty_count.values())) != 1 or len(difficulty_count.keys())!=2:
-            return False
+            unique_questions.add(q["content"])
+            unique_choices=set()
+            for choice in q["choices"]:
+                
+                unique_choices.add(choice["content"])
+            if len(unique_choices)!=3:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The Choices for every question should be unique")
 
-        if len(set(objective_count.values())) != 1 or len(objective_count.keys())!=3:
-            return False
+
+        if len(unique_questions)!=len(questions.questions):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The questions should be unique")
+
+        
 
         return True
     
@@ -38,14 +44,12 @@ class QuestionService:
 
         chapter= await chapter_service.get_chapter_by_id(chapter_id=chapter_id,session=session)
         result_list = []
-        if chapter.completed==True:
-            raise HTTPException(status_code=status.HTTP_302_FOUND,detail="The chapter already have 12 questions")
 
         async with session.begin_nested():
 
             is_questions_valid=await self.validate_questions(questions=questions_bulk,session=session)
             if not is_questions_valid:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The questions should be eqully distributed")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The questions and choices should be unique")
             
 
             for question in questions_bulk.questions:
@@ -86,7 +90,11 @@ class QuestionService:
                  })
 
 
-            chapter.completed=True
+                await session.execute(
+                    update(Chapter)
+                    .where(Chapter.id == chapter.id)
+                    .values(updated_at=func.now()))
+
             await session.commit()
   
             
@@ -118,6 +126,13 @@ class QuestionService:
 
         if sum(choice.is_correct for choice in choices)!=1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="There must me one correct choice")
+        if  not data_body.content or str(data_body.content).isnumeric():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Please enter a valid question")
+        
+        for choice in choices :
+            if  not choice.content or str(choice.content).isnumeric():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Please enter a valid choice content")
+
 
         question.content=data_body.content #type:ignore
 
@@ -127,4 +142,14 @@ class QuestionService:
         await session.commit()
         new_question= await self.get_question_by_id(question_id=question_id,session=session)
         return new_question
+    
+    async def delete_question_by_id(self,question_id:UUID,session:AsyncSession):
+        question= await self.get_question_by_id(question_id=question_id,session=session)
+        if not question:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The question doesn't exist")
+        await session.delete(question)
+        await session.commit()
+
+        return {"ok": True}
+
 question_service= QuestionService()
