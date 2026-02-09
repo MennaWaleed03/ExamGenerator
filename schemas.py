@@ -29,7 +29,7 @@ class CourseResponseModel(CourseModel):
 class ChapterModel(BaseModel):
 
     chapter_number :int
-    completed : int
+ 
 
 class ChapterCreateModel(BaseModel):
     chapter_number :int
@@ -61,7 +61,7 @@ class QuestionCreateModel(QuestionModel):
 
 class QuestionRequestModel(BaseModel):
 
-    questions: Annotated[List[QuestionCreateModel], Field(min_length=12, max_length=12)]
+    questions: List[QuestionCreateModel]
 
 class ChoiceResponseModel(ChoicesModel):
     id:uuid.UUID
@@ -78,12 +78,12 @@ class QuestionEditModel(BaseModel):
 
 
 class ExamDetailsRequestModel(BaseModel):
-    questions_per_chapter:Annotated[int,Field(gt=0)]
-    difficult_questions:Annotated[int,Field(gt=0)]
-    simple_questions:Annotated[int,Field(gt=0)]
-    remembring_questions:Annotated[int,Field(gt=0)]
-    understanding_questions:Annotated[int,Field(gt=0)]
-    creative_questions:Annotated[int,Field(gt=0)]
+    questions_per_chapter:int
+    difficult_questions:int
+    simple_questions:int
+    remembering_questions:int
+    understanding_questions:int
+    creative_questions:int
 
 class ExamResponseModel(BaseModel):
     exam_id:uuid.UUID
