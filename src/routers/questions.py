@@ -21,3 +21,11 @@ async def edit_question(question_id:UUID,data_body:QuestionEditModel,session:Asy
 
     result=await question_service.edit_question(question_id,data_body,session)
     return result
+
+@questions_router.delete('/{question_id}')
+async def delete_questions(question_id,session:AsyncSession=Depends(get_session)):
+
+    result=await question_service.delete_question_by_id(question_id,session)
+    if  result:
+        return result
+

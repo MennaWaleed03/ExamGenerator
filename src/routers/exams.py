@@ -5,6 +5,7 @@ from uuid import UUID
 from src.services.ExamService import exam_service
 from fastapi.exceptions import HTTPException
 from fastapi.templating import Jinja2Templates
+from schemas import  ExamResponseModel
 
 chapters_router=APIRouter()
 
@@ -35,7 +36,7 @@ async def get_exam_questions(request:Request,exam_id:UUID,session=Depends(get_se
         "exam_questions.html",
         {
             "request": request,
-            "exam_questions": data,
+            "exam_questions": data, # list of questions , each question have id , content and list of choices
             "exam_id": str(exam_id),
     
         

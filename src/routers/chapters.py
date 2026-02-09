@@ -39,16 +39,16 @@ async def get_chapter_questions(request:Request,chapter_id:UUID,session:AsyncSes
         "questions.html",
         {
             "request": request,
-            "questions": questions,
-            "questions_json": questions_json,
+            "questions": questions_json,
              "chapter_id": str(chapter_id),
+            
 
              
         }
     )
 
 
-
+#########Only Test
 
 @chapters_router.get('/api/{chapter_id}/questions',response_model=List[QuestionResponseModel])
 async def get_questions(chapter_id:UUID,session:AsyncSession=Depends(get_session)):
