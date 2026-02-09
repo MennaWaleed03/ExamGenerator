@@ -63,20 +63,7 @@ class CourseService:
         courses = result.scalars().all()
 
         return courses
-    # async def get_course_chapters(self,course_id:UUID,session:AsyncSession):
-    #     course=await self.get_course_by_id(course_id=course_id,session=session)
-    #     if not course:
-    #         return HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The course doesn't exist")
-        
-    #     stmt = (
-    #     select(Chapter)
-    #     .where(Chapter.course_id == course_id))
 
-    #     result = await session.execute(stmt)
-    
-    #     chapters = result.scalars().all()
-        
-    #     return chapters  if chapters  else []
     
 
 

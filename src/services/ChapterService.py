@@ -1,13 +1,11 @@
 from src.services.CourseService import course_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from src.db.models import Chapter,Question
+from src.db.models import Chapter
 from fastapi.exceptions import HTTPException
 from fastapi import status
 from uuid import UUID
-from schemas import QuestionModel,QuestionCreateModel
-from typing import List
-from collections import defaultdict
+from sqlalchemy.orm import selectinload
 class ChapterService:
     
     async def get_course_chapters(self,course_id:UUID,session:AsyncSession):
@@ -17,7 +15,7 @@ class ChapterService:
         
         stmt = (
         select(Chapter)
-        .where(Chapter.course_id == course_id).order_by(Chapter.chapter_number.asc()))
+        .where(Chapter.course_id == course_id).options(selectinload(Chapter.questions)).order_by(Chapter.chapter_number.asc()))
 
         result = await session.execute(stmt)
     

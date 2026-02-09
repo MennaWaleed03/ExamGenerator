@@ -1,5 +1,4 @@
-from src.services.GeneticAlgorithm import genetic_algorithm
-from src.services.QuestionService import question_service
+from typing import List, Dict,Tuple
 from src.services.ChapterService import chapter_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.exceptions import HTTPException
@@ -9,8 +8,10 @@ from uuid import UUID
 from schemas import QuestionResponseModel,ExamDetailsRequestModel
 from sqlalchemy import insert,select,delete
 from src.enums import ExamStatus
+
 from sqlalchemy.orm import selectinload
-from src.services.CourseService import course_service
+from collections import Counter
+from src.services.GeneticAlgorithm import GeneticExamGenerator
 
 class ExamService:
 
@@ -29,91 +30,174 @@ class ExamService:
         if not exam:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The exam doesn't exist")
         return exam
-    async def validate_number_of_questions(self,total_chapters_number:int,exam_constraints:ExamDetailsRequestModel,session:AsyncSession)->bool:
+    
 
-        total_objective_questions=4*total_chapters_number
-        total_difficulty_questions=6*total_chapters_number
-        if (exam_constraints.creative_questions> total_objective_questions) or(exam_constraints.understanding_questions>total_objective_questions) or(exam_constraints.remembring_questions>total_objective_questions) or(exam_constraints.difficult_questions>total_difficulty_questions)or(exam_constraints.simple_questions>total_difficulty_questions):
-            raise  HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid input numbers")
-        total_questions=total_chapters_number *exam_constraints.questions_per_chapter
+    async def validate_number_of_questions(self,chapters,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
+       
+       
+        total_chapters_number=len(chapters)
 
-        if exam_constraints.questions_per_chapter>12:
-             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="the number of qustions per chapter shouldn't excced 12")
+        required_total=exam_constraints.questions_per_chapter*total_chapters_number
 
-        if (exam_constraints.difficult_questions+exam_constraints.simple_questions) !=total_questions:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of difficult and simple questions must equl the total required questiosn")
+        min_chapter_questions = min((len(ch.questions) for ch in chapters), default=0)
+
+        diff_counter=Counter()  #type:ignore
+        obj_counter=Counter()   #type:ignore
+
+        if exam_constraints.questions_per_chapter>min_chapter_questions:
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="some or all chapters don't have the required number of questions")
         
-        if (exam_constraints.remembring_questions+exam_constraints.understanding_questions+exam_constraints.creative_questions) !=total_questions:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of questions of different objectives must eqult the total required questiosn")
         
-        return True
+
+        for chapter in chapters:
+           
+            for question in chapter.questions:
+                diff_counter[self._enum_to_text(question.difficulty)]+=1
+                obj_counter[self._enum_to_text(question.objective) ]+=1
+                
+
+
+
+        
+
+        if (exam_constraints.difficult_questions+exam_constraints.simple_questions) != required_total:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of difficult and simple questions must equal the total required questiosn")
+        
+        if (exam_constraints.remembering_questions+exam_constraints.understanding_questions+exam_constraints.creative_questions) != required_total:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The sum of questions of different objectives must equal the total required questiosn")
+        
+        if exam_constraints.difficult_questions >diff_counter.get("difficult",0):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"The required number of difficult questions excceed the number of difficult questions in all chapters, there is only {diff_counter.get("difficult",0)} difficult questions")
+        
+ 
+        if exam_constraints.simple_questions >diff_counter.get("simple", 0):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"The required number of simple questions excceed the number of difficult simple in all chapters, there is only {diff_counter.get("simple", 0)} simple questions")
+        
+        if exam_constraints.remembering_questions >obj_counter.get("remembering", 0):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"The required number of remembring questions excceed the number of remembring questions in all chapters, there is only {obj_counter.get("remembering", 0)} remebering questions")
+        
+        if exam_constraints.understanding_questions >obj_counter.get("understanding", 0) :
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"The required number of understanding questions excceed the number of understanding questions in all chapters, there is only {obj_counter.get("understanding", 0)} understanding questions")
+        
+        if exam_constraints.creative_questions> obj_counter.get("creativity", 0):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=f"The required number of creative questions excceed the number of creative questions in all chapters, there is only {obj_counter.get("creativity", 0)} creative questions")
+        
+
+     
+ 
+        
+        return required_total, total_chapters_number, dict(diff_counter), dict(obj_counter)
+    
     
     async def get_all_course_questions(self,exam_constraints:ExamDetailsRequestModel,course_id:UUID,session:AsyncSession):
-        total_questions: list[Question] = []
+        questions_ids_per_chapter:List[List[UUID]]=[]
+        difficulty_map: Dict[UUID, str] ={}
+        objective_map: Dict[UUID, str] ={}
+        
 
         chapters=await chapter_service.get_course_chapters(course_id=course_id,session=session)
         if not chapters:
-            return [],0
-        num_of_chapters=len(chapters)
+            return [], 0, 0, {}, {}
+        
     
-        required_exam_valid= await self.validate_number_of_questions(total_chapters_number=num_of_chapters,exam_constraints=exam_constraints,session=session)
+        required_total, num_chapters , diff_avail, obj_avail= await self.validate_number_of_questions(chapters=chapters,exam_constraints=exam_constraints,session=session)
 
 
         for chapter in chapters:
-            if chapter.completed==False:
-                raise   HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="All Chapters must be completed before generating the exam")
-
-        if required_exam_valid:
-            for chapter in chapters:
-                
-                questions= await question_service.get_chapter_questions(chapter_id=chapter.id,session=session)
-
-                total_questions.extend(
-                questions
-            )
-        total_number_of_required_questions=num_of_chapters* exam_constraints.questions_per_chapter
-        return total_questions, total_number_of_required_questions
+            ids=[]
     
-    async def generate_exam(self,course_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
-        total_questions,total_number_of_required_questions= await self.get_all_course_questions(exam_constraints=exam_constraints,course_id=course_id,session=session)
+            for q in chapter.questions:
+                ids.append(q.id)
+                difficulty_map[q.id] = self._enum_to_text(q.difficulty)
+                objective_map[q.id] = self._enum_to_text(q.objective)
 
-        selected_questions:list[Question]= genetic_algorithm.test_with_random_sampling(questions=total_questions,rules=exam_constraints,total_questions=total_number_of_required_questions)
+            questions_ids_per_chapter.append(ids)
+                
+    
+        return required_total,questions_ids_per_chapter ,num_chapters,difficulty_map,objective_map,diff_avail,obj_avail
+    
+    
+    async def run_generic_algorithm(self,course_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
+
+        required_total,questions_ids_per_chapter,num_of_chapters,difficulty_map,objective_map,diff_avail,obj_avail= await self.get_all_course_questions(exam_constraints=exam_constraints,course_id=course_id,session=session)
+        
+        generator = GeneticExamGenerator(
+            questions_ids_per_chapter,
+            required_total,
+            num_of_chapters,
+            difficulty_map,
+            objective_map,
+            exam_constraints,
+            diff_avail,
+            obj_avail,
+            w_diff=1,
+            w_obj=1,
+            )
+
+        selected_questions_ids, best_fit, diff_counts, obj_counts =generator.run() # :Tuple[List[UUID],float]
+        print(best_fit)
+        if len(selected_questions_ids) != required_total:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Generator did not return the required number of questions.")
+
+        return selected_questions_ids, diff_counts, obj_counts
+    
+    async def get_questions_from_ids(self,selected_questuons_ids,session:AsyncSession):
+
+        stmt = (
+    select(Question)
+    .where(Question.id.in_(selected_questuons_ids)).options(selectinload(Question.choices)))
+
+        result = await session.execute(stmt)
+        questions = result.scalars().all()
+        question_by_id = {q.id: q for q in questions}
+        ordered_questions = [
+        question_by_id[qid]
+        for qid in selected_questuons_ids if qid in question_by_id ]
+
+        return ordered_questions
+
+    async def generate_exam(self,course_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
+
+        selected_questuons_ids, diff_counts, obj_counts=await self.run_generic_algorithm(course_id=course_id,exam_constraints=exam_constraints,session=session)
+
+
         constraints=exam_constraints.model_dump()
         new_exam=Exam(course_id=course_id,constraints=constraints)
+
         session.add(new_exam)
         await session.flush() 
-        rows=[{"exam_id":new_exam.id,"question_id":q.id} for q in selected_questions]
+
+        rows=[{"exam_id":new_exam.id,"question_id":q} for q in selected_questuons_ids]
+
         await session.execute(insert(exam_question_table),rows)
         await session.commit()
+
+        questions=await self.get_questions_from_ids(selected_questuons_ids,session)
+
         return {
             "exam_id":new_exam.id,
             "exam_status":new_exam.status,
-            "questions":[QuestionResponseModel.model_validate(q) for q in selected_questions]
+            "questions":[QuestionResponseModel.model_validate(q) for q in questions],
+            "diff_counts": diff_counts,
+            "obj_counts": obj_counts
         }
 
     async def regenerate_exam(self,course_id:UUID,exam_id:UUID,session:AsyncSession):
         exam= await self.get_exam_by_id(exam_id=exam_id,session=session)
         if not exam:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The exam doesn't exist")
-        rules = ExamDetailsRequestModel.model_validate(exam.constraints) #type:ignore
+        constraints = ExamDetailsRequestModel.model_validate(exam.constraints) #type:ignore
 
         if exam.status==ExamStatus.final: #type:ignore
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Can't regenerate saved exam")
-        total_questions,total_number_of_required_questions= await self.get_all_course_questions(exam_constraints= rules,course_id=course_id,session=session)
+        
+        # await session.execute(delete(exam_question_table).where(exam_question_table.c.exam_id==exam_id))
 
-        selected_questions:list[Question]= genetic_algorithm.test_with_random_sampling(questions=total_questions,rules= rules,total_questions=total_number_of_required_questions)
+        regenerated_exam=await self.generate_exam(course_id=course_id,exam_constraints=constraints,session=session)
+        
+        return regenerated_exam
+    
    
-        await session.execute(delete(exam_question_table).where(exam_question_table.c.exam_id==exam_id))
-        rows = [{"exam_id": exam_id, "question_id": q.id} for q in selected_questions]
-        await session.execute(insert(exam_question_table), rows)
-
-        await session.commit()
-        return {
-            "exam_id":exam.id,#type:ignore
-            "exam_status":exam.status,#type:ignore
-            "questions":[QuestionResponseModel.model_validate(q) for q in selected_questions]
-        }
-
     async def save_exam(self,exam_id:UUID,session:AsyncSession):
         exam= await self.get_exam_by_id(exam_id=exam_id,session=session)
 
@@ -121,6 +205,7 @@ class ExamService:
              raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The exam doesn't exist")
         if exam.status==ExamStatus.final:
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The exam is already saved")
+       
         exam.status=ExamStatus.final
         await session.commit()
         await session.refresh(exam)
