@@ -25,18 +25,6 @@
         {% for ex in exams_data %}
           {% set total = (ex.difficult_count|int) + (ex.simple_count|int) %}
 
-          {# Clean enum: "ExamStatus.final" -> "final" #}
-          {% set raw_status = (ex.exam_status or '') ~ '' %}
-          {% set status_text = raw_status.split('.')[-1] %}
-          {% set s = status_text|lower %}
-
-          {% if s == 'final' %}
-            {% set badge_class = 'text-bg-success' %}
-          {% elif s == 'draft' %}
-            {% set badge_class = 'text-bg-warning text-dark' %}
-          {% else %}
-            {% set badge_class = 'text-bg-secondary' %}
-          {% endif %}
 
           <div class="col-12 col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm rounded-4">
@@ -51,7 +39,7 @@
                     </div>
                   </div>
 
-                  <span class="badge {{ badge_class }}">{{ status_text }}</span>
+                 
                 </div>
 
                 <hr class="my-3"/>
@@ -102,7 +90,7 @@
   {% endif %}
 </div>
 
-<!-- ✅ Delete Exam Modal (ONLY ONCE, outside the loop) -->
+
 <div class="modal fade" id="deleteExamModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -136,5 +124,6 @@
 {% endblock content %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="{{ url_for('static', path='js/exam.js') }}"></script>
 {% endblock scripts %}

@@ -6,7 +6,7 @@
         <thead>
           <tr>
             <th scope="col">Chapter Number</th>
-            <th scope="col">Status</th>
+            <th scope="col">Number of questions</th>
             <th scope="col">Last Updated</th>
             <th scope="col">Action</th>
           </tr>
@@ -18,11 +18,7 @@
             <th scope="row">{{ chapter.chapter_number }}</th>
 
             <td>
-              {% if chapter.completed %}
-                <span class="badge bg-success">Completed</span>
-              {% else %}
-                <span class="badge bg-danger">Not completed</span>
-              {% endif %}
+              {{chapter.questions|length}}
             </td>
 
             <td>{{ chapter.updated_at.strftime('%Y-%m-%d') }}</td>
@@ -39,7 +35,7 @@
       <!-- GENERATE QUESTIONS -->
           <a class="btn btn-secondary btn-sm {% if chapter.completed %}disabled{% endif %}"
             data-bs-toggle="tooltip"
-            data-bs-title="{% if chapter.completed %}Questions already generated{% else %}Generate questions{% endif %}"
+            data-bs-title="Add questions"
             data-action="generate-questions"
             data-chapter-id="{{ chapter.id }}"
             data-generate-btn="1"
@@ -82,7 +78,7 @@
       data-course-id="{{ course_id }}">
       <i class="bi bi-plus-lg fs-4"></i>
     </a>
-<!-- Delete Chapter Modal (ONE modal for the whole page) -->
+<!-- Delete Chapter Modal  -->
       <div class="modal fade" id="deleteChapterModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -120,84 +116,112 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
-      <form id="addQuestionsForm">
+      <form id="addQuestionsForm" novalidate>
         <div class="modal-body">
 
-          {% set sections = [
-            {"diff":"easy","diff_label":"Easy","diff_badge":"bg-success","lvl":"remembering","lvl_label":"Remembering","lvl_badge":"bg-primary"},
-            {"diff":"easy","diff_label":"Easy","diff_badge":"bg-success","lvl":"understanding","lvl_label":"Understanding","lvl_badge":"bg-info"},
-            {"diff":"easy","diff_label":"Easy","diff_badge":"bg-success","lvl":"creativity","lvl_label":"Creativity","lvl_badge":"bg-warning text-dark"},
-            {"diff":"difficult","diff_label":"Difficult","diff_badge":"bg-danger","lvl":"remembering","lvl_label":"Remembering","lvl_badge":"bg-primary"},
-            {"diff":"difficult","diff_label":"Difficult","diff_badge":"bg-danger","lvl":"understanding","lvl_label":"Understanding","lvl_badge":"bg-info"},
-            {"diff":"difficult","diff_label":"Difficult","diff_badge":"bg-danger","lvl":"creativity","lvl_label":"Creativity","lvl_badge":"bg-warning text-dark"}
-          ] %}
+          <!-- Add button -->
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-muted">
+              Add up to <b>50</b> questions.
+            </div>
 
-          {% for s in sections %}
-            {% set block_id = "q_" ~ s.diff ~ "_" ~ s.lvl %}
+            <button type="button" class="btn btn-outline-primary" id="btnAddQuestion">
+              <i class="bi bi-plus-circle"></i> Add question
+            </button>
+          </div>
 
-            <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
-              <div class="fw-semibold">
-                <span class="badge {{ s.diff_badge }} me-2">{{ s.diff_label }}</span>
-                <span class="badge {{ s.lvl_badge }}">{{ s.lvl_label }}</span>
+          <!-- Where question cards will be appended -->
+          <div id="questionsContainer"></div>
+
+          <!-- Template (hidden) -->
+          <template id="questionCardTemplate">
+            <div class="card mb-3 question-card" data-q-index="">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="fw-semibold">
+                  Question <span class="q-number"></span>
+                </div>
+
+                <button type="button" class="btn btn-sm btn-outline-danger btnRemoveQuestion" title="Remove">
+                  <i class="bi bi-dash-circle"></i>
+                </button>
               </div>
 
-              <button type="button"
-                      class="btn btn-sm btn-outline-secondary"
-                      data-q-toggle
-                      data-target="#{{ block_id }}">
-                <i class="bi bi-caret-down-fill"></i>
-              </button>
-            </div>
+              <div class="card-body">
 
-            <div id="{{ block_id }}" class="d-none border rounded p-3 mb-3">
-              {% for q in [1,2] %}
-                <div class="border rounded p-3 mb-3">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Question {{ q }}</div>
-                    <small class="text-muted">{{ s.diff_label }} · {{ s.lvl_label }}</small>
+                <!-- (Recommended) metadata your API needs -->
+                <div class="row g-2 mb-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Difficulty</label>
+                    <select class="form-select q-difficulty" required>
+                      <option value="simple" selected>Simple</option>
+                      <option value="difficult">Difficult</option>
+                    </select>
+                    <div class="invalid-feedback">Choose difficulty.</div>
                   </div>
 
-                  <div class="mb-3">
-                    <label class="form-label">Content</label>
-                    <input class="form-control"
-                           name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_text"
-                           placeholder="Write the question here..."
-                           required>
-                  </div>
-
-                  <div class="mb-2">
-                    <label class="form-label">Choices (select the correct one)</label>
-                    {% for opt in ["A","B","C"] %}
-                      <div class="input-group mb-2">
-                        <div class="input-group-text">
-                          <input class="form-check-input mt-0"
-                                 type="radio"
-                                 name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_correct"
-                                 value="{{ opt }}"
-                                 required>
-                        </div>
-                        <span class="input-group-text">{{ opt }}</span>
-                        <input type="text"
-                               class="form-control"
-                               name="{{ s.diff }}_{{ s.lvl }}_q{{ q }}_{{ opt }}"
-                               placeholder="Choice {{ opt }}"
-                               required>
-                      </div>
-                    {% endfor %}
+                  <div class="col-md-6">
+                    <label class="form-label">Objective</label>
+                    <select class="form-select q-objective" required>
+                      <option value="remembering" selected>Remembering</option>
+                      <option value="understanding">Understanding</option>
+                      <option value="creativity">Creativity</option>
+                    </select>
+                    <div class="invalid-feedback">Choose objective.</div>
                   </div>
                 </div>
-              {% endfor %}
+
+                <div class="mb-3">
+                  <label class="form-label">Question content</label>
+                  <input type="text" class="form-control q-text" placeholder="Write the question here..." required>
+                  <div class="invalid-feedback">Question content is required.</div>
+                </div>
+
+                <div class="mb-2">
+                  <label class="form-label">Choices (select the correct one)</label>
+
+                  <div class="input-group mb-2">
+                    <div class="input-group-text">
+                      <input class="form-check-input mt-0 q-correct" type="radio" value="A" required>
+                    </div>
+                    <span class="input-group-text">A</span>
+                    <input type="text" class="form-control q-choice" data-choice="A" placeholder="Choice A" required>
+                    <div class="invalid-feedback">Choice A is required.</div>
+                  </div>
+
+                  <div class="input-group mb-2">
+                    <div class="input-group-text">
+                      <input class="form-check-input mt-0 q-correct" type="radio" value="B" required>
+                    </div>
+                    <span class="input-group-text">B</span>
+                    <input type="text" class="form-control q-choice" data-choice="B" placeholder="Choice B" required>
+                    <div class="invalid-feedback">Choice B is required.</div>
+                  </div>
+
+                  <div class="input-group mb-2">
+                    <div class="input-group-text">
+                      <input class="form-check-input mt-0 q-correct" type="radio" value="C" required>
+                    </div>
+                    <span class="input-group-text">C</span>
+                    <input type="text" class="form-control q-choice" data-choice="C" placeholder="Choice C" required>
+                    <div class="invalid-feedback">Choice C is required.</div>
+                  </div>
+
+                  <div class="form-text text-muted">
+                    Make sure to pick the correct choice.
+                  </div>
+                </div>
+
+              </div>
             </div>
-          {% endfor %}
+          </template>
 
         </div>
 
         <div class="modal-footer">
           <button type="button" id="discardQuestionsBtn" class="btn btn-outline-danger">Discard</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="submit" class="btn btn-primary">Submit</button>
+          <button type="submit" class="btn btn-primary">Save</button>
         </div>
- 
 
       </form>
 
@@ -236,8 +260,19 @@
               </div>
 
               <div class="col-md-6">
-                <div class="alert alert-secondary mb-0">
-                  Make sure the totals match the required number of questions.
+                <div class="alert alert-secondary mb-0" id="examTotalsBox">
+                  <div class="fw-semibold">Required total questions:</div>
+                  <div class="mt-1">
+                    <span id="requiredTotalText" class="fw-bold">0</span>
+                    <span class="text-muted">(questions_per_chapter × chapters)</span>
+                  </div>
+
+                  <div class="mt-2 small">
+                    <div>Difficulty total: <span id="difficultyTotalText">0</span></div>
+                    <div>Objective total: <span id="objectiveTotalText">0</span></div>
+                  </div>
+
+                  <div class="mt-2 small d-none text-danger" id="totalsMismatchText"></div>
                 </div>
               </div>
 
@@ -257,7 +292,7 @@
 
               <div class="col-md-4">
                 <label class="form-label">Remembering questions</label>
-                <input type="number" class="form-control" name="remembring_questions" min="0" step="1" required>
+                <input type="number" class="form-control" name="remembering_questions" min="0" step="1" required>
                 <div class="invalid-feedback">Required.</div>
               </div>
 
@@ -300,17 +335,16 @@
       <div class="modal-header">
         <div>
           <h5 class="modal-title mb-0">Generated Exam</h5>
-            <div>
-          Exam ID: <span id="generatedExamId"></span><br>
-          Status: <span id="generatedExamStatus"></span>
-        </div>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
       <div class="modal-body">
-        <div id="generatedExamBody"></div>
-        <div class="mt-2 text-danger small d-none" id="generatedExamError"></div>
+        <div id="generatedExamSummary" class="mb-3"></div>
+          <div id="generatedExamBody"></div>
+          <div class="mt-2 text-danger small d-none" id="generatedExamError">
+        </div>
+        
       </div>
 
       <div class="modal-footer">
@@ -332,7 +366,14 @@
 {% block scripts %}
 <script>
   window.__courseId = {{ course_id | tojson }};
+  window.__totalChapters = {{ number_of_chapters}};
 </script>
 <script src="{{ url_for('static', path='js/chapters.js') }}"></script>
 <script src="{{ url_for('static', path='js/generate_exam.js') }}"></script>
+<script>
+  window.addEventListener("pageshow", (e) => {
+    // If the page is restored from cache, reload to show updated counts
+    if (e.persisted) window.location.reload();
+  });
+</script>
 {% endblock scripts %}

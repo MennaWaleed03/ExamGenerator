@@ -27,33 +27,23 @@
       <button class="btn btn-sm btn-outline-success" id="btnToggleAnswers" type="button">
         Toggle correct answers
       </button>
-
-      <div class="d-flex gap-2 flex-wrap">
-        <button class="btn btn-sm btn-outline-dark" id="btnExpandAll" type="button">Expand all</button>
-        <button class="btn btn-sm btn-outline-dark" id="btnCollapseAll" type="button">Collapse all</button>
-      </div>
     </div>
 
     <!-- Scroll area -->
-    <div class="overflow-auto" style="max-height: calc(150vh - 290px);">
+    <div class="overflow-auto" style="max-height: 70vh;">
 
       {% for q in exam_questions %}
 
-        {# normalize enum strings: "XEnum.simple" -> "simple" #}
-        {% set diff_text = (q.difficulty ~ '').split('.')[-1] %}
-        {% set obj_text  = (q.objective ~ '').split('.')[-1] %}
-        {% set diff = diff_text|lower %}
-        {% set obj  = obj_text|lower %}
 
-        {% if diff == 'difficult' %}
+        {% if q.difficulty == 'difficult' %}
           {% set diff_badge = 'text-bg-danger' %}
         {% else %}
           {% set diff_badge = 'text-bg-primary' %}
         {% endif %}
 
-        {% if obj == 'remembering' %}
+        {% if q.objective == 'remembering' %}
           {% set obj_badge = 'text-bg-info' %}
-        {% elif obj == 'understanding' %}
+        {% elif q.objective == 'understanding' %}
           {% set obj_badge = 'text-bg-warning text-dark' %}
         {% else %}
           {% set obj_badge = 'text-bg-success' %}
@@ -70,8 +60,8 @@
             </div>
 
             <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-              <span class="badge {{ diff_badge }}">{{ diff_text }}</span>
-              <span class="badge {{ obj_badge }}">{{ obj_text }}</span>
+              <span class="badge {{ diff_badge }}">{{ q.difficulty }}</span>
+              <span class="badge {{ obj_badge }}">{{ q.objective }}</span>
               <!-- small arrow (Bootstrap icon replacement) -->
               <span class="text-body-secondary" aria-hidden="true">▾</span>
             </div>

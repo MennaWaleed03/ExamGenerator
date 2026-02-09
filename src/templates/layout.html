@@ -230,7 +230,7 @@
         <hr />
         <ul class="nav nav-pills flex-column mb-auto">
           <li class="nav-item">
-            <a href="/courses" class="nav-link active" aria-current="page">
+            <a href="/courses" class="nav-link  text-white" aria-current="page">
               <svg
                 class="bi pe-none me-2"
                 width="16"
@@ -243,7 +243,7 @@
             </a>
           </li>
           <li>
-            <a href=# class="nav-link text-white">
+            <a href=# class="nav-link text-white disabled text-white">
               <svg
                 class="bi pe-none me-2"
                 width="16"
@@ -356,9 +356,11 @@
             });
         });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     {% block scripts %}
 
         {% endblock scripts %}
 
   </body>
+  
 </html>
