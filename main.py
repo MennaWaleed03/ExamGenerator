@@ -8,6 +8,13 @@ from src.routers.courses import courses_router
 from src.routers.chapters import chapters_router
 from src.routers.questions import questions_router
 from src.routers.exams import exams_router
+from src.errors import error_handler
+from src.db.main import get_session
+from fastapi.responses import RedirectResponse
+from fastapi.routing import APIRoute
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError,HTTPException
+
 @asynccontextmanager
 async def life_span(app:FastAPI):
     print("Server is Started")
@@ -27,9 +34,20 @@ description="A REST API for a genertaing exams for different courses",
 lifespan=life_span
 )
 
+templates = Jinja2Templates(directory="src/templates")
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/courses")
+
+
+
 BASE_DIR = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
 app.include_router(courses_router,prefix='/courses',tags=["courses"])
 app.include_router(chapters_router,prefix='/chapters',tags=["chapters"])
 app.include_router(questions_router,prefix='/questions',tags=["questions"])
 app.include_router(exams_router,prefix='/exams',tags=["exams"])
+
+
+app.add_exception_handler(RequestValidationError,error_handler.validation_exception_handler) #type:ignore
+app.add_exception_handler(StarletteHTTPException, error_handler.http_exception_handler)#type:ignore
