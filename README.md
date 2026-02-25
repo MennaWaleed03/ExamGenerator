@@ -1,3 +1,10 @@
+Got it! I see that in your copy, the formatting for **code blocks and sections** got flattened, which makes it harder to read on GitHub. Let me clean it up properly so you can **copy-paste directly** — everything will render nicely with headers, code blocks, and lists.
+
+Here’s the polished version:
+
+---
+
+````markdown
 # ExamGenerator – AI-Based Exam Optimization Platform
 
 ## Overview
@@ -31,52 +38,74 @@ It leverages **Genetic Algorithms** to balance constraints such as difficulty, t
 ```bash
 git clone https://github.com/YourUsername/ExamGenerator.git
 cd ExamGenerator
+````
 
-Create a virtual environment:
+2. Create a virtual environment:
+
 ```bash
 # Linux / Mac
 python -m venv venv
 source venv/bin/activate
 
-```bash
 # Windows
 python -m venv venv
 venv\Scripts\activate
+```
 
-Install dependencies:
+3. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
+```
 
-Set up the PostgreSQL database:
+4. Set up the PostgreSQL database:
 
-Create a database named exam_generator.
+* Create a database named `exam_generator`.
+* Update `DATABASE_URL` in `config.py` or `.env`.
 
-Update DATABASE_URL in config.py or .env.
+5. Run the backend server:
 
-Run the backend server:
 ```bash
 uvicorn main:app --reload
+```
 
-Open the frontend by launching index.html in your browser.
+6. Open the frontend by launching `index.html` in your browser.
 
-Usage
+---
 
-Log in or register as a user.
+## Usage
 
-Add questions to the categorized question bank.
+1. Log in or register as a user.
+2. Add questions to the categorized question bank.
+3. Generate exams using the **Genetic Algorithm** to balance difficulty and topic distribution.
+4. Preview or export generated exams.
 
-Generate exams using the Genetic Algorithm to balance difficulty and topic distribution.
+---
 
-Preview or export generated exams.
+## Future Improvements
 
-Future Improvements
+* Add **AI question suggestions** using NLP for automated question generation.
+* Implement a **grading and analytics system** for exam results.
+* Deploy the platform to the **cloud** for remote access.
 
-Add AI question suggestions using NLP for automated question generation.
+---
 
-Implement a grading and analytics system for exam results.
-
-Deploy the platform to the cloud for remote access.
-
-License
+## License
 
 This project is licensed under the MIT License.
+
+---
+
+```
+
+---
+
+✅ **Key improvements in this version:**  
+- All **commands are in proper code blocks**.  
+- Sections like **Usage**, **Installation**, and **Future Improvements** are clearly separated.  
+- Everything is ready to **render perfectly on GitHub**.  
+
+If you want, I can also **make a shorter 1-paragraph “CV-friendly” version** of this README so it’s **quick for recruiters to read**.  
+
+Do you want me to do that?
+```
