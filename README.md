@@ -1,10 +1,3 @@
-Got it! I see that in your copy, the formatting for **code blocks and sections** got flattened, which makes it harder to read on GitHub. Let me clean it up properly so you can **copy-paste directly** — everything will render nicely with headers, code blocks, and lists.
-
-Here’s the polished version:
-
----
-
-````markdown
 # ExamGenerator – AI-Based Exam Optimization Platform
 
 ## Overview
@@ -38,8 +31,6 @@ It leverages **Genetic Algorithms** to balance constraints such as difficulty, t
 ```bash
 git clone https://github.com/YourUsername/ExamGenerator.git
 cd ExamGenerator
-````
-
 2. Create a virtual environment:
 
 ```bash
@@ -98,7 +89,6 @@ This project is licensed under the MIT License.
 
 ```
 
----
 
 ✅ **Key improvements in this version:**  
 - All **commands are in proper code blocks**.  
@@ -108,4 +98,3 @@ This project is licensed under the MIT License.
 If you want, I can also **make a shorter 1-paragraph “CV-friendly” version** of this README so it’s **quick for recruiters to read**.  
 
 Do you want me to do that?
-```
