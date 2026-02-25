@@ -85,16 +85,3 @@ uvicorn main:app --reload
 
 This project is licensed under the MIT License.
 
----
-
-```
-
-
-✅ **Key improvements in this version:**  
-- All **commands are in proper code blocks**.  
-- Sections like **Usage**, **Installation**, and **Future Improvements** are clearly separated.  
-- Everything is ready to **render perfectly on GitHub**.  
-
-If you want, I can also **make a shorter 1-paragraph “CV-friendly” version** of this README so it’s **quick for recruiters to read**.  
-
-Do you want me to do that?
