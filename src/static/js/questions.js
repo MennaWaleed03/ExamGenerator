@@ -1,10 +1,38 @@
-
-
-console.log("questions.js LOADED ✅ version=2026-02-08 EDIT+DELETE-MODAL");
+// static/js/questions.js
+import { apiFetch } from "/static/js/api.js";
+console.log("questions.js LOADED ✅ version=2026-02-27 COOKIE-AUTH-FIX");
 
 document.addEventListener("DOMContentLoaded", () => {
   // If your router has a prefix (e.g. "/api/questions"), change this:
   const QUESTIONS_API_BASE = "/questions";
+
+  function redirectToLogin() {
+    window.location.href = "/users/login";
+  }
+
+  async function readErrorMessage(res, fallback) {
+    try {
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const data = await res.json().catch(() => null);
+        return data?.detail || data?.message || fallback;
+      }
+      const txt = await res.text().catch(() => "");
+      return txt?.trim() || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  async function safeReadJson(res) {
+    try {
+      const ct = res.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) return null;
+      return await res.json().catch(() => null);
+    } catch {
+      return null;
+    }
+  }
 
   // -----------------------------
   // Read initial questions data
@@ -48,32 +76,34 @@ document.addEventListener("DOMContentLoaded", () => {
   // Helpers
   // -----------------------------
   function removeQuestionNav(qid) {
-  const nav = document.querySelector(`[data-question-nav="${CSS.escape(String(qid))}"]`);
-  if (nav) nav.remove();
-}
+    const nav = document.querySelector(
+      `[data-question-nav="${CSS.escape(String(qid))}"]`
+    );
+    if (nav) nav.remove();
+  }
 
-function renumberQuestionsUI() {
-  // Renumber RIGHT side badges "Q1, Q2..."
-  const cards = document.querySelectorAll('[data-question-card]');
-  let i = 1;
-  cards.forEach(card => {
-    const badge = card.querySelector(".badge.bg-dark");
-    if (badge) badge.textContent = `Q${i}`;
-    i++;
-  });
+  function renumberQuestionsUI() {
+    // Renumber RIGHT side badges "Q1, Q2..."
+    const cards = document.querySelectorAll("[data-question-card]");
+    let i = 1;
+    cards.forEach((card) => {
+      const badge = card.querySelector(".badge.bg-dark");
+      if (badge) badge.textContent = `Q${i}`;
+      i++;
+    });
 
-  // Renumber LEFT side links "Q1 — ..."
-  const navLinks = document.querySelectorAll("#list-example a[data-question-nav]");
-  let j = 1;
-  navLinks.forEach(a => {
-    // Replace only the leading "Q<number> —" part, keep rest text
-    // Example: "Q3 — Simple - Remembering"
-    const t = a.textContent || "";
-    const newText = t.replace(/^Q\d+\s+—\s+/, `Q${j} — `);
-    a.textContent = newText;
-    j++;
-  });
-}
+    // Renumber LEFT side links "Q1 — ..."
+    const navLinks = document.querySelectorAll(
+      "#list-example a[data-question-nav]"
+    );
+    let j = 1;
+    navLinks.forEach((a) => {
+      const t = a.textContent || "";
+      const newText = t.replace(/^Q\d+\s+—\s+/, `Q${j} — `);
+      a.textContent = newText;
+      j++;
+    });
+  }
 
   function showError(msg) {
     if (!errorBox) return;
@@ -89,7 +119,9 @@ function renumberQuestionsUI() {
 
   function setCorrectRadio(letter) {
     if (!formEl) return;
-    const r = formEl.querySelector(`input[name="edit_correct"][value="${letter}"]`);
+    const r = formEl.querySelector(
+      `input[name="edit_correct"][value="${letter}"]`
+    );
     if (r) r.checked = true;
   }
 
@@ -119,9 +151,13 @@ function renumberQuestionsUI() {
       .map((ch) => {
         const isCorrect = !!ch.is_correct;
         return `
-          <div class="list-group-item ${isCorrect ? "border border-success bg-success bg-opacity-10" : ""}">
+          <div class="list-group-item ${
+            isCorrect ? "border border-success bg-success bg-opacity-10" : ""
+          }">
             <div class="d-flex align-items-center justify-content-between">
-              <span class="${isCorrect ? "fw-semibold" : ""}">${escapeHtml(ch.content)}</span>
+              <span class="${isCorrect ? "fw-semibold" : ""}">${escapeHtml(
+          ch.content
+        )}</span>
               ${
                 isCorrect
                   ? `<span class="badge bg-success"><i class="bi bi-check2-circle me-1"></i> Correct</span>`
@@ -135,7 +171,9 @@ function renumberQuestionsUI() {
   }
 
   function removeQuestionFromUI(qid) {
-    const card = document.querySelector(`[data-question-card="${CSS.escape(String(qid))}"]`);
+    const card = document.querySelector(
+      `[data-question-card="${CSS.escape(String(qid))}"]`
+    );
     if (card) card.remove();
   }
 
@@ -190,7 +228,6 @@ function renumberQuestionsUI() {
         bootstrap.Modal.getOrCreateInstance(deleteModalEl).show();
       } catch (err) {
         console.error(err);
-        // fallback
         if (confirm("Delete this question?")) {
           pendingDeleteQuestionId = String(qid);
           confirmDeleteBtn?.click();
@@ -212,69 +249,78 @@ function renumberQuestionsUI() {
     isDeleting = true;
     confirmDeleteBtn.disabled = true;
 
-    let res, data;
     try {
       const url = `${QUESTIONS_API_BASE}/${encodeURIComponent(qid)}`;
-      res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "DELETE",
         headers: { Accept: "application/json" },
       });
-      data = await res.json().catch(() => null);
+
+      // ✅ cookie expired / not logged in
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await readErrorMessage(res, "Failed to delete question.");
+        alert(msg);
+        return;
+      }
+
+      // Some APIs return 204 No Content for DELETE
+      const data = await safeReadJson(res);
+
+      // If you return {"ok": true}, we'll respect it.
+      // If you return 204, data will be null and that's still success.
+      if (data && data.ok === false) {
+        alert("Delete failed (unexpected response).");
+        return;
+      }
+
+      // Remove from cache and UI
+      QMAP.delete(String(qid));
+      removeQuestionFromUI(qid);
+      removeQuestionNav(qid);
+      renumberQuestionsUI();
+
+      // Refresh ScrollSpy
+      try {
+        const spyEl = document.querySelector(
+          '[data-bs-spy="scroll"][data-bs-target="#list-example"]'
+        );
+        if (spyEl) {
+          const spy =
+            bootstrap.ScrollSpy.getInstance(spyEl) || new bootstrap.ScrollSpy(spyEl);
+          spy.refresh();
+        }
+      } catch {}
+
+      // If edit modal open for same question, close it
+      try {
+        const openId = editQuestionId?.value ? String(editQuestionId.value) : null;
+        if (openId && openId === String(qid) && editModalEl) {
+          bootstrap.Modal.getOrCreateInstance(editModalEl).hide();
+        }
+      } catch {}
+
+      // Close delete modal
+      try {
+        if (deleteModalEl) bootstrap.Modal.getOrCreateInstance(deleteModalEl).hide();
+      } catch {}
+
+      pendingDeleteQuestionId = null;
     } catch (err) {
       console.error(err);
+      alert("Network error while deleting.");
+    } finally {
       confirmDeleteBtn.disabled = false;
       isDeleting = false;
-      alert("Network error while deleting.");
-      return;
     }
-
-    confirmDeleteBtn.disabled = false;
-    isDeleting = false;
-
-    if (!res.ok) {
-      alert(data?.detail || data?.message || "Failed to delete question.");
-      return;
-    }
-
-    // Expect {"ok": true}
-    if (!data?.ok) {
-      alert("Delete failed (unexpected response).");
-      return;
-    }
-
-    // Remove from cache and UI
-    QMAP.delete(String(qid));
-    removeQuestionFromUI(qid);
-    removeQuestionNav(qid);
-    renumberQuestionsUI();
-
-    try {
-      const spyEl = document.querySelector('[data-bs-spy="scroll"][data-bs-target="#list-example"]');
-      if (spyEl) {
-        const spy = bootstrap.ScrollSpy.getInstance(spyEl) || new bootstrap.ScrollSpy(spyEl);
-        spy.refresh();
-      }
-    } catch {}
-
-    // If edit modal open for same question, close it
-    try {
-      const openId = editQuestionId?.value ? String(editQuestionId.value) : null;
-      if (openId && openId === String(qid) && editModalEl) {
-        bootstrap.Modal.getOrCreateInstance(editModalEl).hide();
-      }
-    } catch {}
-
-    // Close delete modal
-    try {
-      if (deleteModalEl) bootstrap.Modal.getOrCreateInstance(deleteModalEl).hide();
-    } catch {}
-
-    pendingDeleteQuestionId = null;
   });
 
-  // Optional: when delete modal closes, clear pending id (does not clear form content)
+  // Optional: when delete modal closes, clear pending id
   deleteModalEl?.addEventListener("hidden.bs.modal", () => {
-    // Keep it safe: if user cancels, just clear the pending ID
     pendingDeleteQuestionId = null;
     if (deletePreviewEl) deletePreviewEl.textContent = "";
     if (confirmDeleteBtn) confirmDeleteBtn.disabled = false;
@@ -310,11 +356,9 @@ function renumberQuestionsUI() {
 
     if (saveBtn) saveBtn.disabled = true;
 
-    let res;
-    let updated;
     try {
       const url = `${QUESTIONS_API_BASE}/${encodeURIComponent(qid)}`;
-      res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -322,26 +366,36 @@ function renumberQuestionsUI() {
         },
         body: JSON.stringify(payload),
       });
-      updated = await res.json().catch(() => null);
+
+      // ✅ cookie expired / not logged in
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await readErrorMessage(res, "Failed to update question.");
+        return showError(msg);
+      }
+
+      const updated = await safeReadJson(res);
+      if (!updated || !updated.id) {
+        return showError("Update succeeded but response is missing question data.");
+      }
+
+      // Update local cache + UI
+      QMAP.set(String(updated.id), updated);
+      applyToUI(updated);
+
+      // Close edit modal
+      try {
+        if (editModalEl) bootstrap.Modal.getOrCreateInstance(editModalEl).hide();
+      } catch {}
     } catch (err) {
       console.error(err);
-      if (saveBtn) saveBtn.disabled = false;
       return showError("Network error while saving.");
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
     }
-
-    if (saveBtn) saveBtn.disabled = false;
-
-    if (!res.ok) {
-      return showError(updated?.detail || updated?.message || "Failed to update question.");
-    }
-
-    // Update local cache + UI
-    QMAP.set(String(updated.id), updated);
-    applyToUI(updated);
-
-    // Close edit modal
-    try {
-      if (editModalEl) bootstrap.Modal.getOrCreateInstance(editModalEl).hide();
-    } catch {}
   });
 });

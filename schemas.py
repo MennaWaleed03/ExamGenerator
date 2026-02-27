@@ -1,10 +1,14 @@
-from pydantic import BaseModel,ConfigDict,Field,conlist,field_validator
+from pydantic import BaseModel,ConfigDict,Field,EmailStr
 import uuid
 from typing import Annotated
 from datetime import datetime
 from src.enums import ObjectiveEnum,DifficultyEnum,ExamStatus
 
 from typing import List,Annotated
+
+
+
+
 class CourseModel(BaseModel):
     name:Annotated[str,Field(...,description="The course name")]
  
@@ -24,6 +28,30 @@ class CourseResponseModel(CourseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserModel(BaseModel):
+    id:uuid.UUID
+    username:str
+    email:str
+    first_name:str
+    last_name:str
+    courses:List[CourseResponseModel]=[]
+    created_at:datetime
+    updated_at:datetime
+    model_config=ConfigDict(
+       from_attributes=True
+    )
+
+class UserCreateModel(BaseModel):
+    first_name: str = Field(max_length=25)
+    last_name: str = Field(max_length=25)
+    username:Annotated[str,Field(max_length=20)]
+    email:Annotated[EmailStr,Field(max_length=40)]
+    password:Annotated[str,Field(min_length=6)]
+
+class UserLoginModel(BaseModel):
+
+    email:Annotated[EmailStr,Field(max_length=40)]
+    password:Annotated[str,Field(min_length=6)]
 
 
 class ChapterModel(BaseModel):

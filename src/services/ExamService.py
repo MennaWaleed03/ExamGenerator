@@ -3,12 +3,12 @@ from src.services.ChapterService import chapter_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.exceptions import HTTPException
 from fastapi import status
-from src.db.models import Exam,Question,exam_question_table
+from src.db.models import Exam,Question,exam_question_table,Course
 from uuid import UUID
 from schemas import QuestionResponseModel,ExamDetailsRequestModel
 from sqlalchemy import insert,select,delete
 from src.enums import ExamStatus
-
+from src.services.CourseService import course_service
 from sqlalchemy.orm import selectinload
 from collections import Counter
 from src.services.GeneticAlgorithm import GeneticExamGenerator
@@ -23,8 +23,11 @@ class ExamService:
 
 
 
-    async def get_exam_by_id(self,exam_id:UUID,session:AsyncSession):
-        statement=select(Exam).where(Exam.id==exam_id)
+    async def get_exam_by_id(self,exam_id:UUID,teacher_id:UUID,session:AsyncSession):
+        statement=(select(Exam)
+                   .join(Course,Course.id==Exam.course_id)
+                   .where(Exam.id==exam_id,
+                          Course.teacher_id==teacher_id))
         result=await session.execute(statement)
         exam=result.scalars().first()
         if not exam:
@@ -89,13 +92,13 @@ class ExamService:
         return required_total, total_chapters_number, dict(diff_counter), dict(obj_counter)
     
     
-    async def get_all_course_questions(self,exam_constraints:ExamDetailsRequestModel,course_id:UUID,session:AsyncSession):
+    async def get_all_course_questions(self,exam_constraints:ExamDetailsRequestModel,course_id:UUID,teacher_id:UUID,session:AsyncSession):
         questions_ids_per_chapter:List[List[UUID]]=[]
         difficulty_map: Dict[UUID, str] ={}
         objective_map: Dict[UUID, str] ={}
         
-
-        chapters=await chapter_service.get_course_chapters(course_id=course_id,session=session)
+        course=await course_service.get_course_by_id(course_id=course_id,session=session,teacher_id=teacher_id)
+        chapters=await chapter_service.get_course_chapters(course=course,session=session)
         if not chapters:
             return [], 0, 0, {}, {}
         
@@ -117,9 +120,9 @@ class ExamService:
         return required_total,questions_ids_per_chapter ,num_chapters,difficulty_map,objective_map,diff_avail,obj_avail
     
     
-    async def run_generic_algorithm(self,course_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
+    async def run_generic_algorithm(self,course_id:UUID,teacher_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
 
-        required_total,questions_ids_per_chapter,num_of_chapters,difficulty_map,objective_map,diff_avail,obj_avail= await self.get_all_course_questions(exam_constraints=exam_constraints,course_id=course_id,session=session)
+        required_total,questions_ids_per_chapter,num_of_chapters,difficulty_map,objective_map,diff_avail,obj_avail= await self.get_all_course_questions(exam_constraints=exam_constraints,course_id=course_id,teacher_id=teacher_id,session=session)
         
         generator = GeneticExamGenerator(
             questions_ids_per_chapter,
@@ -156,9 +159,9 @@ class ExamService:
 
         return ordered_questions
 
-    async def generate_exam(self,course_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
+    async def generate_exam(self,course_id:UUID,teacher_id:UUID,exam_constraints:ExamDetailsRequestModel,session:AsyncSession):
 
-        selected_questuons_ids, diff_counts, obj_counts=await self.run_generic_algorithm(course_id=course_id,exam_constraints=exam_constraints,session=session)
+        selected_questuons_ids, diff_counts, obj_counts=await self.run_generic_algorithm(course_id=course_id,teacher_id=teacher_id,exam_constraints=exam_constraints,session=session)
 
 
         constraints=exam_constraints.model_dump()
@@ -182,8 +185,8 @@ class ExamService:
             "obj_counts": obj_counts
         }
 
-    async def regenerate_exam(self,course_id:UUID,exam_id:UUID,session:AsyncSession):
-        exam= await self.get_exam_by_id(exam_id=exam_id,session=session)
+    async def regenerate_exam(self,course_id:UUID,teacher_id:UUID,exam_id:UUID,session:AsyncSession):
+        exam= await self.get_exam_by_id(exam_id=exam_id,teacher_id=teacher_id,session=session)
         if not exam:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The exam doesn't exist")
         constraints = ExamDetailsRequestModel.model_validate(exam.constraints) #type:ignore
@@ -193,13 +196,13 @@ class ExamService:
         
         # await session.execute(delete(exam_question_table).where(exam_question_table.c.exam_id==exam_id))
 
-        regenerated_exam=await self.generate_exam(course_id=course_id,exam_constraints=constraints,session=session)
+        regenerated_exam=await self.generate_exam(course_id=course_id,teacher_id=teacher_id,exam_constraints=constraints,session=session)
         
         return regenerated_exam
     
    
-    async def save_exam(self,exam_id:UUID,session:AsyncSession):
-        exam= await self.get_exam_by_id(exam_id=exam_id,session=session)
+    async def save_exam(self,exam_id:UUID,teacher_id:UUID,session:AsyncSession):
+        exam= await self.get_exam_by_id(exam_id=exam_id,teacher_id=teacher_id,session=session)
 
         if not exam:
              raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The exam doesn't exist")
@@ -213,9 +216,15 @@ class ExamService:
         return exam
 
 
-    async def get_course_exams(self,course_id:UUID,session:AsyncSession):
+    async def get_course_exams(self,course_id:UUID,teacher_id:UUID,session:AsyncSession):
         data:list=[]
-        statment=select(Exam).where(Exam.course_id==course_id ).where(Exam.status == ExamStatus.final).options(selectinload(Exam.questions)).order_by(Exam.updated_at.asc())
+        statment=(select(Exam)
+                  .join(Course,Course.id==Exam.course_id)
+                  .where(Exam.course_id==course_id,
+                         Course.teacher_id==teacher_id,
+                         Exam.status == ExamStatus.final )
+                  .options(selectinload(Exam.questions))
+                  .order_by(Exam.updated_at.asc()))
         result=await session.execute(statement=statment)
         exams=result.scalars().all()
        
@@ -239,8 +248,8 @@ class ExamService:
 
         return data
 
-    async def delete_exam(self,exam_id:UUID,session:AsyncSession):
-        exam=await self.get_exam_by_id(exam_id=exam_id,session=session)
+    async def delete_exam(self,exam_id:UUID,teacher_id:UUID,session:AsyncSession):
+        exam=await self.get_exam_by_id(exam_id=exam_id,teacher_id=teacher_id,session=session)
         if exam.status==ExamStatus.draft:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The user can't delete a draft exam it's the system job")
         if exam:
@@ -249,8 +258,8 @@ class ExamService:
             return True
         return False
 
-    async def get_exam_questions(self,exam_id:UUID,session:AsyncSession):
-        exam=await self.get_exam_by_id(exam_id=exam_id,session=session)
+    async def get_exam_questions(self,exam_id:UUID,teacher_id:UUID,session:AsyncSession):
+        exam=await self.get_exam_by_id(exam_id=exam_id,teacher_id=teacher_id,session=session)
         if not exam or exam.status==ExamStatus.draft:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Can't access this exam")
         questions_ids_stms=select(exam_question_table.c.question_id).where(exam_question_table.c.exam_id==exam_id)

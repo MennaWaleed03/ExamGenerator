@@ -1,0 +1,153 @@
+{% extends "auth_layout.html" %}
+
+{% block content %}
+<style>
+  .auth-bg {
+    min-height: 88vh;
+    background:
+      radial-gradient(900px circle at 15% 10%, rgba(113,44,249,.10), transparent 40%),
+      radial-gradient(900px circle at 85% 30%, rgba(32,201,151,.10), transparent 40%),
+      radial-gradient(900px circle at 55% 90%, rgba(13,110,253,.08), transparent 45%);
+  }
+  .auth-card {
+    border: 0;
+    border-radius: 1.5rem;
+  }
+  .auth-card .card-body {
+    padding: 2rem;
+  }
+  .form-floating > label {
+    color: rgba(0,0,0,.65);
+  }
+  [data-bs-theme="dark"] .form-floating > label {
+    color: rgba(255,255,255,.65);
+  }
+</style>
+
+<div class="auth-bg d-flex align-items-center py-5">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 col-lg-6 col-xl-5">
+
+        <div class="card auth-card shadow-sm">
+          <div class="card-body">
+            <div class="text-center mb-3">
+              <div class="d-inline-flex align-items-center justify-content-center rounded-circle border"
+                   style="width:52px;height:52px;">
+                <i class="bi bi-mortarboard fs-4"></i>
+              </div>
+              <h3 class="mt-2 mb-0">Create Account</h3>
+              <div class="text-muted">Sign up to start creating courses and exams.</div>
+            </div>
+
+            <form id="signupForm" class="needs-validation" novalidate>
+              <div class="row g-2">
+                <!-- First Name -->
+                <div class="col-12 col-md-6">
+                  <div class="form-floating">
+                    <input id="first_name" type="text" class="form-control" placeholder="First name"
+                           maxlength="25" required />
+                    <label for="first_name"><i class="bi bi-person me-2"></i>First name</label>
+                    <div class="invalid-feedback">First name is required (max 25).</div>
+                  </div>
+                </div>
+
+                <!-- Last Name -->
+                <div class="col-12 col-md-6">
+                  <div class="form-floating">
+                    <input id="last_name" type="text" class="form-control" placeholder="Last name"
+                           maxlength="25" required />
+                    <label for="last_name"><i class="bi bi-person me-2"></i>Last name</label>
+                    <div class="invalid-feedback">Last name is required (max 25).</div>
+                  </div>
+                </div>
+
+                <!-- Username -->
+                <div class="col-12">
+                  <div class="form-floating">
+                    <input id="username" type="text" class="form-control" placeholder="Username"
+                           maxlength="20" required />
+                    <label for="username"><i class="bi bi-at me-2"></i>Username</label>
+                    <div class="invalid-feedback">Username is required (max 20).</div>
+                  </div>
+                </div>
+
+                <!-- Email -->
+                <div class="col-12">
+                  <div class="form-floating">
+                    <input id="email" type="email" class="form-control" placeholder="name@example.com"
+                           maxlength="40" required />
+                    <label for="email"><i class="bi bi-envelope me-2"></i>Email</label>
+                    <div class="invalid-feedback">Enter a valid email (max 40).</div>
+                  </div>
+                </div>
+
+                <!-- Password + toggle -->
+                <div class="col-12">
+                  <div class="input-group">
+                    <div class="form-floating flex-grow-1">
+                      <input id="password" type="password" class="form-control" placeholder="Password"
+                             minlength="6" required />
+                      <label for="password"><i class="bi bi-shield-lock me-2"></i>Password</label>
+                      <div class="invalid-feedback">Password must be at least 6 characters.</div>
+                    </div>
+                    <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn"
+                            aria-label="Show password" title="Show/Hide">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                  <div class="form-text">Minimum 6 characters.</div>
+                </div>
+              </div>
+
+              <div id="errorBox" class="alert alert-danger mt-3 d-none" role="alert"></div>
+              <div id="successBox" class="alert alert-success mt-3 d-none" role="alert"></div>
+
+              <button id="signupBtn" class="btn btn-primary w-100 mt-2 py-1" type="submit">
+                <span class="me-2">Sign Up</span>
+                <i class="bi bi-person-plus"></i>
+              </button>
+
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <a class="text-decoration-none" href="/users/login">
+                  <i class="bi bi-box-arrow-in-right me-1"></i>Already have an account? Login
+                </a>
+                <a class="text-decoration-none text-muted" href="/users/login">
+                  <i class="bi bi-house me-1"></i>Home
+                </a>
+              </div>
+
+              <hr class="my-1">
+
+              <p class="text-center text-muted small mb-0">
+                By creating an account, you agree to use the system responsibly.
+              </p>
+            </form>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+<script type="module" src="/static/js/signup.js"></script>
+<script>
+  // Password show/hide toggle (no module needed)
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("togglePasswordBtn");
+    const input = document.getElementById("password");
+    if (!btn || !input) return;
+
+    btn.addEventListener("click", () => {
+      const isPwd = input.getAttribute("type") === "password";
+      input.setAttribute("type", isPwd ? "text" : "password");
+      btn.innerHTML = isPwd ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+      btn.setAttribute("aria-label", isPwd ? "Hide password" : "Show password");
+    });
+  });
+</script>
+{% endblock scripts %}

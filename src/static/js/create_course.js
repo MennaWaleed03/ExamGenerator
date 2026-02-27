@@ -1,5 +1,6 @@
 // static/js/create_course.js
-console.log("create_course.js LOADED ✅ version = 2026-02-01 SHOW-EXAMS-FIX");
+import { apiFetch } from "/static/js/api.js";
+console.log("create_course.js LOADED ✅ version = 2026-02-27 COOKIE-AUTH-FIX");
 
 document.addEventListener("DOMContentLoaded", () => {
   const grid = document.getElementById("coursesGrid");
@@ -62,8 +63,9 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="p-4 text-center border rounded">No courses yet.</div>
         </div>`;
     } else {
-      // IMPORTANT: Show Exams is now a data-action link handled by JS (prevents /courses#)
-      grid.innerHTML = items.map((c) => `
+      grid.innerHTML = items
+        .map(
+          (c) => `
         <div class="col-12 col-md-4">
           <div class="card h-100 shadow-sm course-card cursor-pointer" data-course-id="${c.id}">
             <div class="card-body d-flex flex-column">
@@ -72,7 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
               <div class="mt-auto d-flex gap-2">
                 <a href="/courses/${encodeURIComponent(c.id)}/exams"
-                  class="btn btn-outline-primary btn-sm flex-fill show-exams-link">
+                   class="btn btn-outline-primary btn-sm flex-fill show-exams-link">
                   Show Exams
                 </a>
 
@@ -87,7 +89,9 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
         </div>
-      `).join("");
+      `
+        )
+        .join("");
     }
 
     // pager
@@ -119,19 +123,24 @@ document.addEventListener("DOMContentLoaded", () => {
       </li>`;
   }
 
-  // ✅ bypass caching
+  // ✅ bypass caching + redirect if unauthenticated
   async function refreshCoursesFromServer() {
     const url = `/courses/api?t=${Date.now()}`; // cache buster
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "GET",
       cache: "no-store",
       headers: {
-        "Accept": "application/json",
+        Accept: "application/json",
         "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
+        Pragma: "no-cache",
       },
     });
+
+    if (res.status === 401) {
+      window.location.href = "/users/login";
+      return;
+    }
 
     if (!res.ok) {
       console.warn("Failed to refresh courses from server.", res.status);
@@ -152,17 +161,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.persisted) refreshCoursesFromServer();
   });
 
-  // ✅ SHOW EXAMS FIX (must be BEFORE card navigation)
+  // ✅ Fix: stop card click when clicking "Show Exams" link
+  // (we let the <a href="..."> navigate normally)
   grid.addEventListener("click", (e) => {
-    const a = e.target.closest('a[data-action="show-exams"]');
+    const a = e.target.closest("a.show-exams-link");
     if (!a) return;
-
-    e.preventDefault();     // prevents /courses#
-    e.stopPropagation();    // prevents card click handler
-    const courseId = a.dataset.id;
-    if (!courseId) return;
-
-    window.location.href = `/courses/${encodeURIComponent(courseId)}/exams`;
+    e.stopPropagation(); // prevents card click handler
   });
 
   // navigation to chapters (clicking on card body)
@@ -221,11 +225,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const name = document.getElementById("courseName").value.trim();
     const chapters = parseInt(document.getElementById("numChapters").value, 10);
 
-    const res = await fetch("/courses", {
+    const res = await apiFetch("/courses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, number_of_chapters: chapters }),
     });
+
+    if (res.status === 401) {
+      window.location.href = "/users/login";
+      return;
+    }
 
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -247,11 +256,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const id = editIdEl.value;
       const name = editNameEl.value.trim();
 
-      const res = await fetch(`/courses/${encodeURIComponent(id)}`, {
+      const res = await apiFetch(`/courses/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
+
+      if (res.status === 401) {
+        window.location.href = "/users/login";
+        return;
+      }
 
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -269,7 +283,12 @@ document.addEventListener("DOMContentLoaded", () => {
     confirmDeleteBtn.addEventListener("click", async () => {
       const id = deleteIdEl.value;
 
-      const res = await fetch(`/courses/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const res = await apiFetch(`/courses/${encodeURIComponent(id)}`, { method: "DELETE" });
+
+      if (res.status === 401) {
+        window.location.href = "/users/login";
+        return;
+      }
 
       let data = null;
       if (res.status !== 204) data = await res.json().catch(() => null);

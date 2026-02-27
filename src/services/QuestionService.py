@@ -1,7 +1,7 @@
 from src.services.ChapterService import chapter_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,update
-from src.db.models import Question,Choice,Chapter
+from src.db.models import Question,Choice,Chapter,Course
 from fastapi.exceptions import HTTPException
 from fastapi import status
 from uuid import UUID
@@ -40,9 +40,16 @@ class QuestionService:
     
 
 
-    async def create_questions(self,chapter_id:UUID,questions_bulk:QuestionRequestModel,session:AsyncSession):
+    async def create_questions(self,chapter_id:UUID,teacher_id:UUID,questions_bulk:QuestionRequestModel,session:AsyncSession):
 
         chapter= await chapter_service.get_chapter_by_id(chapter_id=chapter_id,session=session)
+        stmt=await session.execute((select(Course)
+              .join(Chapter,Course.id==Chapter.course_id)
+              .where(Course.id==chapter.course_id,
+                     Course.teacher_id==teacher_id)))
+        teacher_has_access=stmt.scalars().first()
+        if teacher_has_access is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail="User don't have access to generate questions for this chapter")
         result_list = []
 
         async with session.begin_nested():
@@ -99,30 +106,43 @@ class QuestionService:
   
             
         return result_list
-    async def get_question_by_id(self,question_id:UUID,session:AsyncSession):
-        result= await session.execute(select(Question).where(Question.id==question_id).options(selectinload(Question.choices)))
+    async def get_question_by_id(self,question_id:UUID,teacher_id:UUID,session:AsyncSession):
+        result= await session.execute((select(Question)
+                                      .join(Chapter,Chapter.id==Question.chapter_id)
+                                      .join(Course,Chapter.course_id==Course.id)
+                                      .where(Question.id==question_id,
+                                             Course.teacher_id==teacher_id)
+                                      .options(selectinload(Question.choices))))
 
         question =result.scalars().first()
         if question:
             return question
         else :
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The questions doesn't exist") 
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The questions doesn't exist or user don't have access for this question") 
     
-    async def get_chapter_questions(self,chapter_id:UUID,session:AsyncSession):
+    async def get_chapter_questions(self,chapter_id:UUID,teacher_id:UUID,session:AsyncSession):
 
         chapter= await chapter_service.get_chapter_by_id(chapter_id=chapter_id,session=session)
         if not chapter:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The Chapter is not exist")
+        stmt=await session.execute((select(Course)
+              .join(Chapter,Course.id==Chapter.course_id)
+              .where(Course.id==chapter.course_id,
+                     Course.teacher_id==teacher_id)))
+        teacher_has_access=stmt.scalars().first()
+        if teacher_has_access is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail="User don't have access to generate questions for this chapter")
         result= await session.execute(select(Question).where(Question.chapter_id==chapter_id).options(selectinload(Question.choices)))
         questions_with_choices=result.scalars().all()
 
         return questions_with_choices
 
-    async def edit_question(self,question_id:UUID,data_body:QuestionEditModel,session:AsyncSession):
+    async def edit_question(self,teacher_id:UUID,question_id:UUID,data_body:QuestionEditModel,session:AsyncSession):
 
-        result= await session.execute(select(Question).where(Question.id==question_id).options(selectinload(Question.choices)))
-        question=result.scalars().first()
+        question= await self.get_question_by_id(question_id=question_id,teacher_id=teacher_id,session=session)
+
         choices=data_body.choices
+
 
         if sum(choice.is_correct for choice in choices)!=1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="There must me one correct choice")
@@ -140,11 +160,11 @@ class QuestionService:
             choice.content=choices[i].content
             choice.is_correct=choices[i].is_correct
         await session.commit()
-        new_question= await self.get_question_by_id(question_id=question_id,session=session)
+        new_question= await self.get_question_by_id(question_id=question_id,teacher_id=teacher_id,session=session)
         return new_question
     
-    async def delete_question_by_id(self,question_id:UUID,session:AsyncSession):
-        question= await self.get_question_by_id(question_id=question_id,session=session)
+    async def delete_question_by_id(self,question_id:UUID,teacher_id:UUID,session:AsyncSession):
+        question= await self.get_question_by_id(question_id=question_id,teacher_id=teacher_id,session=session)
         if not question:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="The question doesn't exist")
         await session.delete(question)

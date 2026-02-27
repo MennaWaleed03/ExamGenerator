@@ -1,0 +1,120 @@
+{% extends "auth_layout.html" %}
+
+{% block content %}
+<style>
+  .auth-bg {
+    min-height: 88vh;
+    background:
+      radial-gradient(900px circle at 15% 10%, rgba(113,44,249,.10), transparent 40%),
+      radial-gradient(900px circle at 85% 30%, rgba(32,201,151,.10), transparent 40%),
+      radial-gradient(900px circle at 55% 90%, rgba(13,110,253,.08), transparent 45%);
+  }
+  .auth-card {
+    border: 0;
+    border-radius: 1rem;
+  }
+  .auth-card .card-body {
+    padding: 1.5rem;
+  }
+  .form-floating > label {
+    color: rgba(0,0,0,.65);
+  }
+  [data-bs-theme="dark"] .form-floating > label {
+    color: rgba(255,255,255,.65);
+  }
+</style>
+
+<div class="auth-bg d-flex align-items-center py-4">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-8 col-lg-6 col-xl-5">
+
+        <div class="card auth-card shadow-sm">
+          <div class="card-body">
+
+            <div class="text-center mb-3">
+              <div class="d-inline-flex align-items-center justify-content-center rounded-circle border"
+                   style="width:52px;height:52px;">
+                <i class="bi bi-box-arrow-in-right fs-4"></i>
+              </div>
+              <h3 class="mt-2 mb-0">Welcome Back</h3>
+              <div class="text-muted">Login to access your courses and exams.</div>
+            </div>
+
+            <form id="loginForm" class="needs-validation" novalidate>
+              <div class="row g-2">
+
+                <!-- Email -->
+                <div class="col-12">
+                  <div class="form-floating">
+                    <input id="email" type="email" class="form-control"
+                           placeholder="name@example.com" maxlength="40" required />
+                    <label for="email"><i class="bi bi-envelope me-2"></i>Email</label>
+                    <div class="invalid-feedback">Enter a valid email.</div>
+                  </div>
+                </div>
+
+                <!-- Password + toggle -->
+                <div class="col-12">
+                  <div class="input-group">
+                    <div class="form-floating flex-grow-1">
+                      <input id="password" type="password" class="form-control"
+                             placeholder="Password" minlength="6" required />
+                      <label for="password"><i class="bi bi-shield-lock me-2"></i>Password</label>
+                      <div class="invalid-feedback">Password is required (min 6).</div>
+                    </div>
+                    <button class="btn btn-outline-secondary" type="button" id="togglePasswordBtn"
+                            aria-label="Show password" title="Show/Hide">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              <div id="errorBox" class="alert alert-danger mt-3 d-none" role="alert"></div>
+              <div id="successBox" class="alert alert-success mt-3 d-none" role="alert"></div>
+
+              <button id="loginBtn" class="btn btn-primary w-100 mt-2 py-1" type="submit">
+                <span class="me-2">Login</span>
+                <i class="bi bi-box-arrow-in-right"></i>
+              </button>
+
+              <div class="d-flex justify-content-between align-items-center mt-3">
+                <a class="text-decoration-none" href="/users/signup">
+                  <i class="bi bi-person-plus me-1"></i>Create account
+                </a>
+                <a class="text-decoration-none text-muted" href="/users/login">
+                  <i class="bi bi-house me-1"></i>Home
+                </a>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block scripts %}
+<script type="module" src="/static/js/login.js"></script>
+<script>
+  // Password show/hide toggle
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("togglePasswordBtn");
+    const input = document.getElementById("password");
+    if (!btn || !input) return;
+
+    btn.addEventListener("click", () => {
+      const isPwd = input.getAttribute("type") === "password";
+      input.setAttribute("type", isPwd ? "text" : "password");
+      btn.innerHTML = isPwd ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+      btn.setAttribute("aria-label", isPwd ? "Hide password" : "Show password");
+    });
+  });
+</script>
+{% endblock scripts %}

@@ -1,7 +1,11 @@
 // static/js/exam.js
-console.log("exam.js LOADED ✅");
+import { apiFetch } from "/static/js/api.js";
+console.log("exam.js LOADED ✅ version = 2026-02-27 COOKIE-AUTH-FIX");
 
 document.addEventListener("DOMContentLoaded", () => {
+  function redirectToLogin() {
+    window.location.href = "/users/login";
+  }
 
   /* =========================
      Format exam dates
@@ -38,43 +42,57 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!examIdToDelete) return;
 
       try {
-        const res = await fetch(`/exams/${encodeURIComponent(examIdToDelete)}`, {
+        const res = await apiFetch(`/exams/${encodeURIComponent(examIdToDelete)}`, {
           method: "DELETE",
         });
 
-      const deleteModalEl = document.getElementById("deleteExamModal");
-      if (deleteModalEl) {
-        const modal = bootstrap.Modal.getOrCreateInstance(deleteModalEl);
-        modal.hide();
-      }
-        if (!res.ok) {
-          await Swal.fire({
-          icon: "error",
-          title: "Oops...",
-          text: "Failed to delete the exam!",
-        });
+        // ✅ cookie expired / not logged in
+        if (res.status === 401) {
+          redirectToLogin();
           return;
         }
 
-       await Swal.fire({
-        icon: "success",
-        title: "Deleted!",
-        text: "Exam deleted successfully",
-        timer: 1200,
-        showConfirmButton: false,
-      });
-        // Simple & reliable
-        window.location.reload();
+        // ✅ if failed, try to extract message (sometimes API returns JSON, sometimes not)
+        if (!res.ok) {
+          let msg = "Failed to delete the exam!";
+          try {
+            if (res.status !== 204) {
+              const data = await res.json().catch(() => null);
+              msg = data?.detail || data?.message || msg;
+            }
+          } catch {}
 
+          await Swal.fire({
+            icon: "error",
+            title: "Oops...",
+            text: msg,
+          });
+          return;
+        }
+
+        // ✅ Success → hide modal
+        const deleteModalEl = document.getElementById("deleteExamModal");
+        if (deleteModalEl) {
+          bootstrap.Modal.getOrCreateInstance(deleteModalEl).hide();
+        }
+
+        await Swal.fire({
+          icon: "success",
+          title: "Deleted!",
+          text: "Exam deleted successfully",
+          timer: 1200,
+          showConfirmButton: false,
+        });
+
+        window.location.reload();
       } catch (err) {
         console.error("Delete exam error:", err);
-       await Swal.fire({
-        icon: "error",
-        title: "Unexpected error",
-        text: "Unexpected error while deleting exam.",
-      });
+        await Swal.fire({
+          icon: "error",
+          title: "Unexpected error",
+          text: "Unexpected error while deleting exam.",
+        });
       }
     });
   }
-
 });

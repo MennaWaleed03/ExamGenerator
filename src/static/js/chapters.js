@@ -1,4 +1,9 @@
+import { apiFetch } from "/static/js/api.js";
+
 document.addEventListener("DOMContentLoaded", () => {
+  function redirectToLogin() {
+    window.location.href = "/users/login";
+  }
 
   function initTooltips(scope = document) {
     try {
@@ -45,12 +50,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const numEl = card.querySelector(".q-number");
       if (numEl) numEl.textContent = n;
 
-      // Store index for payload
       card.dataset.qIndex = String(idx);
 
       // IMPORTANT: make radio "name" unique per question so they don't interfere
       const radioName = `q${idx}_correct`;
-      card.querySelectorAll('input.q-correct[type="radio"]').forEach(r => {
+      card.querySelectorAll('input.q-correct[type="radio"]').forEach((r) => {
         r.name = radioName;
       });
     });
@@ -79,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (textIn && prefill.content) textIn.value = prefill.content;
 
       const choiceInputs = card.querySelectorAll(".q-choice");
-      choiceInputs.forEach(inp => {
+      choiceInputs.forEach((inp) => {
         const k = inp.dataset.choice;
         if (k && prefill.choices?.[k] != null) inp.value = prefill.choices[k];
       });
@@ -112,7 +116,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const card = btn.closest(".question-card");
     if (!card) return;
 
-    // Keep at least 1 question
     const cards = getCards();
     if (cards.length <= 1) {
       alert("At least one question is required.");
@@ -152,11 +155,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const res = await fetch(`/chapters/${encodeURIComponent(chapterId)}`, {
+    const res = await apiFetch(`/chapters/${encodeURIComponent(chapterId)}`, {
       method: "DELETE",
     });
 
-    const data = await res.json().catch(() => null);
+    if (res.status === 401) {
+      redirectToLogin();
+      return;
+    }
+
+    // DELETE might return 204 => no JSON
+    let data = null;
+    if (res.status !== 204) data = await res.json().catch(() => null);
 
     if (!res.ok) {
       alert(data?.detail || data?.message || "Failed to delete chapter");
@@ -188,9 +198,14 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      const res = await fetch(`/courses/${encodeURIComponent(courseId)}/chapters`, {
+      const res = await apiFetch(`/courses/${encodeURIComponent(courseId)}/chapters`, {
         method: "POST",
       });
+
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
 
       const data = await res.json().catch(() => null);
 
@@ -278,17 +293,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return { questions };
   }
 
-  // Strong validation:
-  // - HTML5 checkValidity()
-  // - plus: ensure each card has checked correct answer
   function validateDynamicForm(formEl) {
-    // HTML constraints
     if (!formEl.checkValidity()) {
       formEl.classList.add("was-validated");
       return false;
     }
 
-    // Ensure each card has a checked radio
     const cards = getCards();
     for (const card of cards) {
       const checked = card.querySelector('input.q-correct[type="radio"]:checked');
@@ -327,11 +337,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const url = `/chapters/${encodeURIComponent(activeChapterId)}/questions`;
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(payload),
     });
+
+    if (res.status === 401) {
+      redirectToLogin();
+      return;
+    }
 
     const data = await res.json().catch(() => null);
 
@@ -341,12 +356,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Close modal
     try {
       bootstrap.Modal.getInstance(addQuestionsModalEl)?.hide();
     } catch {}
 
-    // Reset after success
     addQuestionsForm.reset();
     resetQuestionsUI();
 
@@ -357,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
     window.location.reload();
   });
 
-  // Initialize modal UI once (in case modal is opened without clicking generate)
+  // Initialize modal UI once
   if (questionsContainer && questionCardTemplate) {
     resetQuestionsUI();
   }

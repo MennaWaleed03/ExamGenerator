@@ -9,6 +9,7 @@ from typing import List
 from fastapi.templating import Jinja2Templates
 from src.services.QuestionService import question_service
 from fastapi.encoders import jsonable_encoder
+from src.auth.dependencies import AccessTokenBearer
 chapters_router=APIRouter()
 
 templates = Jinja2Templates(directory="src/templates")
@@ -17,15 +18,17 @@ templates = Jinja2Templates(directory="src/templates")
 questions_router=APIRouter()
 
 @questions_router.patch('/{question_id}',response_model=QuestionResponseModel)
-async def edit_question(question_id:UUID,data_body:QuestionEditModel,session:AsyncSession=Depends(get_session)):
+async def edit_question(question_id:UUID,data_body:QuestionEditModel,session:AsyncSession=Depends(get_session),user_token_data=Depends(AccessTokenBearer())):
+    teacher_id=UUID(user_token_data['user']['sub'])
 
-    result=await question_service.edit_question(question_id,data_body,session)
+    result=await question_service.edit_question(question_id=question_id,teacher_id=teacher_id,data_body=data_body,session=session)
     return result
 
 @questions_router.delete('/{question_id}')
-async def delete_questions(question_id,session:AsyncSession=Depends(get_session)):
+async def delete_questions(question_id,session:AsyncSession=Depends(get_session),user_token_data=Depends(AccessTokenBearer())):
+    teacher_id=UUID(user_token_data['user']['sub'])
 
-    result=await question_service.delete_question_by_id(question_id,session)
+    result=await question_service.delete_question_by_id(question_id=question_id,teacher_id=teacher_id,session=session)
     if  result:
         return result
 

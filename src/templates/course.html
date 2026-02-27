@@ -129,5 +129,5 @@
 <script>
   window.__courses = {{ courses_json | tojson }};
 </script>
-<script src="{{ url_for('static', path='js/create_course.js') }}"></script>
+<script type="module" src="{{ url_for('static', path='js/create_course.js') }}"></script>
 {% endblock scripts %}

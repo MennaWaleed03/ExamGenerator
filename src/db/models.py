@@ -14,6 +14,21 @@ exam_question_table = Table(
     Column("exam_id", ForeignKey("exams.id"), primary_key=True),
     Column("question_id", ForeignKey("questions.id"), primary_key=True)
 )
+class Teacher(Base):
+    __tablename__="teachers"
+    id= Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,index=True)
+    username=Column(String,index=True,nullable=False)
+    email=Column(String,index=True,nullable=False)
+    password_hash=Column(String,nullable=False)
+    first_name=Column(String)
+    last_name=Column(String)
+    created_at= Column( DateTime(timezone=True),
+        server_default=func.now())
+    updated_at= Column( DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now())
+    
+    courses=relationship("Course", back_populates="teacher", cascade="all, delete-orphan",order_by="Course.updated_at.desc()")
 
 class Course(Base):
     __tablename__ = "courses"
@@ -27,6 +42,9 @@ class Course(Base):
         server_default=func.now(),
         onupdate=func.now())
     
+    teacher_id=Column(UUID, ForeignKey("teachers.id"), nullable=True)
+    
+    teacher=relationship("Teacher", back_populates="courses")
     chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
 
     exams= relationship("Exam",back_populates="course",cascade="all, delete-orphan")

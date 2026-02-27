@@ -149,7 +149,13 @@ class Errors:
                     {"request": request},
                     status_code=404
                 )
-
+        elif exc.status_code in [403,401]:
+              return templates.TemplateResponse(
+                    "errors/invalid_token.html",
+                    {"request": request},
+                    status_code=exc.status_code
+                )
+              
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail}

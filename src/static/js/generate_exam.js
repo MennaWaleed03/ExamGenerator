@@ -1,5 +1,6 @@
 // static/js/generate_exam.js
-console.log("generate_exam.js LOADED ✅ version = 2026-02-09 FIX-REGENERATE+TOTALS+ORDER+PAYLOAD");
+import { apiFetch } from "/static/js/api.js";
+console.log("generate_exam.js LOADED ✅ version = 2026-02-27 COOKIE-AUTH-FIX");
 
 document.addEventListener("DOMContentLoaded", () => {
   // -------------------------
@@ -27,11 +28,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnRegenerate = document.getElementById("btnRegenerateExam");
   const btnSave = document.getElementById("btnSaveExam");
 
-  // Totals UI refs (must exist in HTML)
+  // Totals UI refs
   const requiredTotalText = document.getElementById("requiredTotalText");
   const difficultyTotalText = document.getElementById("difficultyTotalText");
   const objectiveTotalText = document.getElementById("objectiveTotalText");
   const totalsMismatchText = document.getElementById("totalsMismatchText");
+
+  function redirectToLogin() {
+    window.location.href = "/users/login";
+  }
 
   if (!courseId) {
     console.warn("window.__courseId is missing. Exam generation disabled.");
@@ -63,7 +68,9 @@ document.addEventListener("DOMContentLoaded", () => {
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   }
   function hideModal(modalEl) {
-    try { bootstrap.Modal.getInstance(modalEl)?.hide(); } catch {}
+    try {
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+    } catch {}
   }
 
   // -------------------------
@@ -109,6 +116,21 @@ document.addEventListener("DOMContentLoaded", () => {
     return Number.isFinite(x) ? x : 0;
   }
 
+  async function readErrorMessage(res, fallback) {
+    // Try JSON, then text, else fallback
+    try {
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const data = await res.json().catch(() => null);
+        return data?.detail || data?.message || fallback;
+      }
+      const txt = await res.text().catch(() => "");
+      return txt?.trim() || fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   // -------------------------
   // Dynamic Totals UI
   // -------------------------
@@ -117,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const required = qpc * totalChapters;
 
     const diffTotal = n(diffEl?.value) + n(simpleEl?.value);
-    const objTotal  = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
+    const objTotal = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
 
     if (requiredTotalText) requiredTotalText.textContent = String(required);
     if (difficultyTotalText) difficultyTotalText.textContent = String(diffTotal);
@@ -140,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  ["input", "change"].forEach(evt => {
+  ["input", "change"].forEach((evt) => {
     qpEl?.addEventListener(evt, updateTotalsUI);
     diffEl?.addEventListener(evt, updateTotalsUI);
     simpleEl?.addEventListener(evt, updateTotalsUI);
@@ -159,17 +181,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!summaryEl) return;
 
     const diff = exam?.diff_counts || {};
-    const obj  = exam?.obj_counts  || {};
+    const obj = exam?.obj_counts || {};
 
     const reqSimple = Number(constraints?.simple_questions ?? 0);
-    const reqDiff   = Number(constraints?.difficult_questions ?? 0);
+    const reqDiff = Number(constraints?.difficult_questions ?? 0);
 
     const reqRem = Number(constraints?.remembering_questions ?? 0);
     const reqUnd = Number(constraints?.understanding_questions ?? 0);
     const reqCre = Number(constraints?.creative_questions ?? 0);
 
     const genSimple = Number(diff.simple ?? 0);
-    const genDiff   = Number(diff.difficult ?? 0);
+    const genDiff = Number(diff.difficult ?? 0);
 
     const genRem = Number(obj.remembering ?? 0);
     const genUnd = Number(obj.understanding ?? 0);
@@ -207,13 +229,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const questions = Array.isArray(exam.questions) ? exam.questions : [];
     if (questions.length === 0) {
-      resultBodyEl.innerHTML = `<div class="text-muted">No questions returned.</div>`;
+      if (resultBodyEl) resultBodyEl.innerHTML = `<div class="text-muted">No questions returned.</div>`;
       return;
     }
 
-    const html = questions.map((q, idx) => {
-      const choices = Array.isArray(q.choices) ? q.choices : [];
-      return `
+    const html = questions
+      .map((q, idx) => {
+        const choices = Array.isArray(q.choices) ? q.choices : [];
+        return `
         <div class="border rounded p-3 mb-3">
           <div class="d-flex justify-content-between align-items-start gap-3">
             <div class="fw-semibold">${idx + 1}. ${escapeHtml(q.content)}</div>
@@ -224,18 +247,23 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <ol class="mt-2 mb-0">
-            ${choices.map(c => `
+            ${choices
+              .map(
+                (c) => `
               <li>
                 ${escapeHtml(c.content)}
                 ${c.is_correct ? `<span class="badge bg-success ms-2">correct</span>` : ``}
               </li>
-            `).join("")}
+            `
+              )
+              .join("")}
           </ol>
         </div>
       `;
-    }).join("");
+      })
+      .join("");
 
-    resultBodyEl.innerHTML = html;
+    if (resultBodyEl) resultBodyEl.innerHTML = html;
   }
 
   // -------------------------
@@ -266,58 +294,70 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // -------------------------
-  // API calls
+  // API calls (cookie-auth safe)
   // -------------------------
   async function apiGenerateExam(constraints) {
     const url = `/courses/${encodeURIComponent(courseId)}/exam`;
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify(constraints),
     });
 
-    const data = await res.json().catch(() => null);
+    if (res.status === 401) {
+      redirectToLogin();
+      throw new Error("Not authenticated.");
+    }
+
     if (!res.ok) {
-      const msg = data?.detail || data?.message || `Failed to generate exam (HTTP ${res.status}).`;
+      const msg = await readErrorMessage(res, `Failed to generate exam (HTTP ${res.status}).`);
       throw new Error(msg);
     }
-    return data;
+
+    return await res.json().catch(() => null);
   }
 
-  // ✅ IMPORTANT: adjust this endpoint to match YOUR backend route
-  // Most common:
-  //   POST /exams/{exam_id}/regenerate
   async function apiRegenerateExam(examId) {
     const url = `/courses/${encodeURIComponent(courseId)}/exams/${encodeURIComponent(examId)}/regenerate`;
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "POST",
-      headers: { "Accept": "application/json" },
+      headers: { Accept: "application/json" },
     });
 
-    const data = await res.json().catch(() => null);
+    if (res.status === 401) {
+      redirectToLogin();
+      throw new Error("Not authenticated.");
+    }
+
     if (!res.ok) {
-      const msg = data?.detail || data?.message || `Failed to regenerate exam (HTTP ${res.status}).`;
+      const msg = await readErrorMessage(res, `Failed to regenerate exam (HTTP ${res.status}).`);
       throw new Error(msg);
     }
-    return data;
+
+    return await res.json().catch(() => null);
   }
 
   async function apiSaveExam(examId) {
     const url = `/exams/${encodeURIComponent(examId)}`;
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method: "PATCH",
-      headers: { "Accept": "application/json" },
+      headers: { Accept: "application/json" },
     });
 
-    const data = await res.json().catch(() => null);
+    if (res.status === 401) {
+      redirectToLogin();
+      throw new Error("Not authenticated.");
+    }
+
     if (!res.ok) {
-      const msg = data?.detail || data?.message || `Failed to save exam (HTTP ${res.status}).`;
+      const msg = await readErrorMessage(res, `Failed to save exam (HTTP ${res.status}).`);
       throw new Error(msg);
     }
-    return data;
+
+    return await res.json().catch(() => null);
   }
 
   // -------------------------
@@ -343,10 +383,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (isGenerating) return;
 
-    // block submit if totals mismatch
     const required = n(qpEl?.value) * totalChapters;
     const diffTotal = n(diffEl?.value) + n(simpleEl?.value);
-    const objTotal  = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
+    const objTotal = n(remEl?.value) + n(undEl?.value) + n(creEl?.value);
 
     if (required > 0 && (diffTotal !== required || objTotal !== required)) {
       setError(generateErrorEl, "Totals mismatch: Difficulty/Objectives must equal the required total.");
@@ -373,7 +412,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       hideModal(generateModalEl);
       showModal(resultModalEl);
-
     } catch (err) {
       setError(generateErrorEl, err?.message || "Failed to generate exam.");
     } finally {
@@ -381,10 +419,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ✅ REGENERATE handler (you were missing this)
   btnRegenerate?.addEventListener("click", async () => {
     setError(resultErrEl, "");
-
     if (isGenerating) return;
 
     const examId = currentExam?.exam_id ?? currentExam?.id ?? null;
@@ -398,8 +434,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const newExam = await apiRegenerateExam(examId);
       currentExam = newExam;
-      renderExam(currentExam);   // uses lastConstraints for summary
-
+      renderExam(currentExam);
     } catch (err) {
       setError(resultErrEl, err?.message || "Failed to regenerate exam.");
     } finally {
@@ -418,19 +453,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     isSaving = true;
-    btnSave.disabled = true;
+    if (btnSave) btnSave.disabled = true;
 
     try {
       await apiSaveExam(examId);
       if (examStatusEl) examStatusEl.textContent = "final";
       alert("Exam saved ✅");
       hideModal(resultModalEl);
-
     } catch (err) {
       setError(resultErrEl, err?.message || "Failed to save exam.");
     } finally {
       isSaving = false;
-      btnSave.disabled = false;
+      if (btnSave) btnSave.disabled = false;
     }
   });
 });

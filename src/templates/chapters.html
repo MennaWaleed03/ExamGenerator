@@ -368,8 +368,8 @@
   window.__courseId = {{ course_id | tojson }};
   window.__totalChapters = {{ number_of_chapters}};
 </script>
-<script src="{{ url_for('static', path='js/chapters.js') }}"></script>
-<script src="{{ url_for('static', path='js/generate_exam.js') }}"></script>
+<script type="module" src="{{ url_for('static', path='js/chapters.js') }}"></script>
+<script type="module" src="{{ url_for('static', path='js/generate_exam.js') }}"></script>
 <script>
   window.addEventListener("pageshow", (e) => {
     // If the page is restored from cache, reload to show updated counts
