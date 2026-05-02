@@ -12,13 +12,24 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch {}
   }
+
   initTooltips();
 
+  // =========================
+  // DOM refs
+  // =========================
   const addQuestionsModalEl = document.getElementById("AddQuestionsModal");
   const addQuestionsForm = document.getElementById("addQuestionsForm");
   const discardQuestionsBtn = document.getElementById("discardQuestionsBtn");
 
-  // Dynamic questions UI refs
+  const chooseQuestionMethodModalEl = document.getElementById("ChooseQuestionMethodModal");
+  const btnChooseManual = document.getElementById("btnChooseManual");
+  const btnChooseAI = document.getElementById("btnChooseAI");
+
+  const aiGenerateQuestionsModalEl = document.getElementById("AIGenerateQuestionsModal");
+  const aiGenerateForm = document.getElementById("aiGenerateForm");
+  const aiQuestionCount = document.getElementById("aiQuestionCount");
+
   const questionsContainer = document.getElementById("questionsContainer");
   const questionCardTemplate = document.getElementById("questionCardTemplate");
   const btnAddQuestion = document.getElementById("btnAddQuestion");
@@ -31,10 +42,55 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let activeChapterId = null;
   let isSubmitting = false;
+  let isAIGenerating = false;
 
   const MAX_QUESTIONS = 50;
   const objectiveSet = new Set(["remembering", "understanding", "creativity"]);
   const difficultySet = new Set(["simple", "difficult"]);
+
+  // =========================
+  // File upload
+  // =========================
+  document.addEventListener("change", async (e) => {
+    const input = e.target.closest(".chapter-file-input");
+    if (!input) return;
+
+    const chapterId = input.dataset.chapterId;
+    const file = input.files?.[0];
+
+    if (!chapterId || !file) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/chapters/${encodeURIComponent(chapterId)}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => null);
+      console.log("Upload response:", response.status, data);
+
+      if (response.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      if (!response.ok) {
+        alert(data?.detail || data?.message || "Upload failed");
+        return;
+      }
+
+      alert(data?.message || "File uploaded successfully ✅");
+      window.location.reload();
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Unexpected error while uploading file");
+    } finally {
+      input.value = "";
+    }
+  });
 
   // =========================
   // Helpers: dynamic cards
@@ -45,6 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function updateCardNumbers() {
     const cards = getCards();
+
     cards.forEach((card, idx) => {
       const n = idx + 1;
       const numEl = card.querySelector(".q-number");
@@ -52,7 +109,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       card.dataset.qIndex = String(idx);
 
-      // IMPORTANT: make radio "name" unique per question so they don't interfere
       const radioName = `q${idx}_correct`;
       card.querySelectorAll('input.q-correct[type="radio"]').forEach((r) => {
         r.name = radioName;
@@ -73,11 +129,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const card = node.querySelector(".question-card");
     if (!card) return;
 
-    // Apply prefill if provided
     if (prefill) {
       const diffSel = card.querySelector(".q-difficulty");
       const objSel = card.querySelector(".q-objective");
       const textIn = card.querySelector(".q-text");
+
       if (diffSel && prefill.difficulty) diffSel.value = prefill.difficulty;
       if (objSel && prefill.objective) objSel.value = prefill.objective;
       if (textIn && prefill.content) textIn.value = prefill.content;
@@ -101,14 +157,40 @@ document.addEventListener("DOMContentLoaded", () => {
   function resetQuestionsUI() {
     if (!questionsContainer) return;
     questionsContainer.innerHTML = "";
-    addQuestionCard(); // start with 1 card
+    addQuestionCard();
     addQuestionsForm?.classList.remove("was-validated");
   }
 
-  // Add button
+  function hideModal(modalEl) {
+    try {
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+    } catch {}
+  }
+
+  function showModal(modalEl) {
+    if (!modalEl) return;
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }
+
+  // =========================
+  // Manual/AI choice buttons
+  // =========================
+  btnChooseManual?.addEventListener("click", () => {
+    hideModal(chooseQuestionMethodModalEl);
+    showModal(addQuestionsModalEl);
+  });
+
+  btnChooseAI?.addEventListener("click", () => {
+    hideModal(chooseQuestionMethodModalEl);
+    aiGenerateForm?.classList.remove("was-validated");
+    showModal(aiGenerateQuestionsModalEl);
+  });
+
+  // =========================
+  // Add/remove/discard dynamic questions
+  // =========================
   btnAddQuestion?.addEventListener("click", () => addQuestionCard());
 
-  // Remove button (event delegation)
   document.addEventListener("click", (e) => {
     const btn = e.target.closest(".btnRemoveQuestion");
     if (!btn) return;
@@ -126,14 +208,13 @@ document.addEventListener("DOMContentLoaded", () => {
     updateCardNumbers();
   });
 
-  // Discard (clear everything back to 1 question)
   discardQuestionsBtn?.addEventListener("click", () => {
     addQuestionsForm?.reset();
     resetQuestionsUI();
   });
 
   // =========================
-  // Store chapterId when opening delete modal
+  // Delete modal chapter id
   // =========================
   document.addEventListener("click", (e) => {
     const btn = e.target.closest('[data-action="delete-chapter"]');
@@ -164,7 +245,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // DELETE might return 204 => no JSON
     let data = null;
     if (res.status !== 204) data = await res.json().catch(() => null);
 
@@ -173,15 +253,12 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    try {
-      bootstrap.Modal.getInstance(deleteChapterModalEl)?.hide();
-    } catch {}
-
+    hideModal(deleteChapterModalEl);
     window.location.reload();
   });
 
   // =========================
-  // ONE Action handler
+  // Main action handler
   // =========================
   document.addEventListener("click", async (e) => {
     const actionEl = e.target.closest("[data-action]");
@@ -189,7 +266,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const action = actionEl.dataset.action;
 
-    // Add chapter
     if (action === "add-chapter") {
       e.preventDefault();
 
@@ -218,13 +294,11 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // View questions (leave as TODO)
     if (action === "view-questions") {
       e.preventDefault();
       return;
     }
 
-    // Generate questions => open modal
     if (action === "generate-questions") {
       e.preventDefault();
 
@@ -233,16 +307,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
       activeChapterId = chapterId;
 
-      if (!addQuestionsModalEl) {
-        alert("AddQuestionsModal is missing in HTML.");
+      if (!chooseQuestionMethodModalEl) {
+        alert("ChooseQuestionMethodModal is missing in HTML.");
         return;
       }
 
-      bootstrap.Modal.getOrCreateInstance(addQuestionsModalEl).show();
+      showModal(chooseQuestionMethodModalEl);
       return;
     }
 
-    // Delete chapter: let Bootstrap open modal
     if (action === "delete-chapter") {
       if (actionEl.tagName === "A") e.preventDefault();
       return;
@@ -250,7 +323,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // =========================
-  // Build payload from dynamic cards
+  // Manual questions payload
   // =========================
   function buildPayloadFromCards() {
     const cards = getCards();
@@ -272,11 +345,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const B = (card.querySelector('.q-choice[data-choice="B"]')?.value ?? "").trim();
       const C = (card.querySelector('.q-choice[data-choice="C"]')?.value ?? "").trim();
 
-      if (!A || !B || !C) throw new Error("Each question must have choices A, B, and C.");
+      if (!A || !B || !C) {
+        throw new Error("Each question must have choices A, B, and C.");
+      }
 
       const correctEl = card.querySelector('input.q-correct[type="radio"]:checked');
       const correct = correctEl?.value ?? "";
-      if (!["A", "B", "C"].includes(correct)) throw new Error("Select the correct choice for every question.");
+      if (!["A", "B", "C"].includes(correct)) {
+        throw new Error("Select the correct choice for every question.");
+      }
 
       questions.push({
         content,
@@ -312,7 +389,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // =========================
-  // Submit questions
+  // Submit manual questions
   // =========================
   addQuestionsForm?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -321,6 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("No chapter selected.");
       return;
     }
+
     if (isSubmitting) return;
 
     if (!validateDynamicForm(addQuestionsForm)) return;
@@ -335,42 +413,116 @@ document.addEventListener("DOMContentLoaded", () => {
 
     isSubmitting = true;
 
-    const url = `/chapters/${encodeURIComponent(activeChapterId)}/questions`;
-
-    const res = await apiFetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.status === 401) {
-      redirectToLogin();
-      return;
-    }
-
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      isSubmitting = false;
-      alert(data?.detail || "Failed to submit questions");
-      return;
-    }
-
     try {
-      bootstrap.Modal.getInstance(addQuestionsModalEl)?.hide();
-    } catch {}
+      const url = `/chapters/${encodeURIComponent(activeChapterId)}/questions`;
 
-    addQuestionsForm.reset();
-    resetQuestionsUI();
+      const res = await apiFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    activeChapterId = null;
-    isSubmitting = false;
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
 
-    alert("Questions submitted successfully ✅");
-    window.location.reload();
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        alert(data?.detail || data?.message || "Failed to submit questions");
+        return;
+      }
+
+      hideModal(addQuestionsModalEl);
+      addQuestionsForm.reset();
+      resetQuestionsUI();
+      activeChapterId = null;
+
+      alert(data?.message || "Questions submitted successfully ✅");
+      window.location.reload();
+    } finally {
+      isSubmitting = false;
+    }
   });
 
-  // Initialize modal UI once
+  // =========================
+  // Submit AI generation
+  // =========================
+    // =========================
+  // Submit AI generation
+  // =========================
+  aiGenerateForm?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!activeChapterId) {
+      alert("No chapter selected.");
+      return;
+    }
+
+    if (isAIGenerating) return;
+
+    const count = Number(aiQuestionCount?.value ?? 0);
+
+    if (!Number.isInteger(count) || count < 1 || count > MAX_QUESTIONS) {
+      aiGenerateForm.classList.add("was-validated");
+      alert(`Please enter a valid number between 1 and ${MAX_QUESTIONS}.`);
+      return;
+    }
+
+    isAIGenerating = true;
+
+    try {
+      const payload = {
+        questions_num: count,
+      };
+
+      const url = `/chapters/${encodeURIComponent(activeChapterId)}/questions/ai-generate`;
+
+      const res = await apiFetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.status === 401) {
+        redirectToLogin();
+        return;
+      }
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        alert(data?.detail || data?.message || "Failed to generate AI questions");
+        return;
+      }
+
+      hideModal(aiGenerateQuestionsModalEl);
+      aiGenerateForm.reset();
+      aiGenerateForm.classList.remove("was-validated");
+      activeChapterId = null;
+
+      alert(data?.message || "AI question generation finished ✅");
+      window.location.reload();
+    } catch (err) {
+      console.error("AI generation error:", err);
+      alert("Unexpected error while generating AI questions");
+    } finally {
+      isAIGenerating = false;
+    }
+  });
+
+  // =========================
+  // Initial setup
+  // =========================
   if (questionsContainer && questionCardTemplate) {
     resetQuestionsUI();
   }

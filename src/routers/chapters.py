@@ -1,8 +1,9 @@
-from fastapi import APIRouter,Depends,status,Request
+from fastapi import APIRouter,Depends,status,Request,File, UploadFile
+from typing import Annotated
 from src.db.main import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from schemas import QuestionResponseModel,QuestionRequestModel,QuestionResponseModel
+from schemas import QuestionResponseModel,QuestionRequestModel,QuestionResponseModel,AIGenerateQuestionsRequest
 from src.services.ChapterService import chapter_service 
 from fastapi.exceptions import HTTPException
 from typing import List
@@ -34,6 +35,26 @@ async def create_questions(chapter_id:UUID,questions:QuestionRequestModel,sessio
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
     
+
+@chapters_router.post("/{chapter_id}/questions/ai-generate")
+async def generate_questions_with_ai(chapter_id:UUID,payload:AIGenerateQuestionsRequest,session:AsyncSession=Depends(get_session),user_token_data=Depends(AccessTokenBearer())):
+    teacher_id=UUID(user_token_data['user']['sub'])
+    print("HEReeeeeeee")
+    try:
+        result=await question_service.generate_chapter_questions_with_ai(chapter_id=chapter_id,teacher_id=teacher_id,questions_num=payload.questions_num,session=session)
+        return {
+            "message": "Questions generated successfully",
+
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
+    
+    #     # result= await question_service.generate_chapter_questions(chapter_id=chapter_id,teacher_id=teacher_id,questions_num=payload.questions_num,session=session)
+    #     # return result
+    # except Exception as e:
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail=str(e))
+    
+
 @chapters_router.get('/{chapter_id}/questions',include_in_schema=False)
 async def get_chapter_questions(request:Request,chapter_id:UUID,session:AsyncSession=Depends(get_session),user_token_data=Depends(AccessTokenBearer())):
     teacher_id=UUID(user_token_data['user']['sub'])
@@ -51,6 +72,13 @@ async def get_chapter_questions(request:Request,chapter_id:UUID,session:AsyncSes
         }
     )
 
+@chapters_router.post("/{chapter_id}/upload")
+async def upload_file(chapter_id:UUID,file: UploadFile,session:AsyncSession=Depends(get_session),user_token_data=Depends(AccessTokenBearer())):
+    teacher_id=UUID(user_token_data['user']['sub'])
+    result=await chapter_service.upload_file(chapter_id=chapter_id,teacher_id=teacher_id,file=file,session=session)
+    return result
+
+   
 
 #########Only Test
 

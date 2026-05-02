@@ -6,7 +6,8 @@ from fastapi.exceptions import HTTPException
 from fastapi import status
 from uuid import UUID
 from schemas import QuestionRequestModel,QuestionEditModel
-
+from src.services.QuestionGenerator import QuestionGenerator
+from src.config.settings import get_settings
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import func
  
@@ -106,6 +107,8 @@ class QuestionService:
   
             
         return result_list
+    
+
     async def get_question_by_id(self,question_id:UUID,teacher_id:UUID,session:AsyncSession):
         result= await session.execute((select(Question)
                                       .join(Chapter,Chapter.id==Question.chapter_id)
@@ -171,5 +174,28 @@ class QuestionService:
         await session.commit()
 
         return {"ok": True}
+    
+    async def generate_chapter_questions_with_ai(self,chapter_id:UUID,teacher_id:UUID,questions_num:int,session:AsyncSession):
+        statement=(
+            select(Chapter)
+                   .join(Course,Course.id== Chapter.course_id)
+                   .where(Chapter.id==chapter_id)
+                   .where(Course.teacher_id==teacher_id)
+                   )
+        
+        result= await session.execute(statement=statement)
+        chapter=result.scalars().first()
+        if not chapter:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="The user is not alloed to add questions to this chapter")
+        file_path=chapter.file_path
+        if not file_path:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="there is no uploaded file for this chapter")
+        questions_generator=QuestionGenerator(num_questions=questions_num,API_KEY=get_settings().GEMINI_API_KEY,model_name="gemini-2.5-flash",file_path=file_path)
+        questions_generated=questions_generator.run()
+        questions_bulk = QuestionRequestModel(**questions_generated)
+        result_questions= await self.create_questions(chapter_id=chapter_id,teacher_id=teacher_id,questions_bulk=questions_bulk,session=session)
+        return  result_questions
+
+    
 
 question_service= QuestionService()

@@ -3,9 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from src.db.models import Chapter,Course
 from fastapi.exceptions import HTTPException
-from fastapi import status
+from fastapi import status,UploadFile
 from uuid import UUID
 from sqlalchemy.orm import selectinload
+from src.config.settings import get_settings
+import os
+import shutil
+from pathlib import Path
+UPLOAD_PATH=get_settings().UPLOAD_PATH
+os.makedirs(UPLOAD_PATH, exist_ok=True)
+
 class ChapterService:
     
     async def get_course_chapters(self,course:Course,session:AsyncSession):
@@ -69,6 +76,52 @@ class ChapterService:
         return {"ok": True}
 
 
+    async def upload_file(self,chapter_id:UUID,teacher_id:UUID,file:UploadFile,session:AsyncSession):
+        print("Entered")
+
+        stmt = (
+        select(Chapter)
+        .join(Course, Chapter.course_id == Course.id)
+        .where(
+            Chapter.id == chapter_id,
+            Course.teacher_id == teacher_id
+        )
+    )
+
+        result = await session.execute(stmt)
+        chapter = result.scalars().first()
+
+        if not chapter:
+            raise HTTPException(
+                status_code=404,
+                detail="Chapter not found or you are not allowed to upload to this chapter"
+            )
+
+      
+        ext = Path(file.filename).suffix.lower() or ".pdf" #type:ignore
+        filename = f"{chapter_id}{ext}"
+        file_path = os.path.join(UPLOAD_PATH, filename)
+
+        
+        if chapter.file_path and os.path.exists(chapter.file_path):
+            os.remove(chapter.file_path)
+
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        
+        chapter.file_path = file_path #type:ignore
+
+        await session.commit()
+        await session.refresh(chapter)
+
+        return {
+            "message": "File uploaded successfully",
+            "file_path": chapter.file_path
+        }
+
+  
 
 
         

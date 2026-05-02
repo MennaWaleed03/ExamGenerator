@@ -24,6 +24,19 @@
             <td>{{ chapter.updated_at.strftime('%Y-%m-%d') }}</td>
 
             <td>
+               <!-- UPLOAD PDF -->
+          <label class="btn btn-outline-info btn-sm"
+                data-bs-toggle="tooltip"
+                data-bs-title="Upload chapter PDF">
+            <i class="bi bi-upload"></i>
+
+            <input type="file"
+                  class="chapter-file-input"
+                  data-chapter-id="{{ chapter.id }}"
+                  accept="application/pdf"
+                  hidden>
+          </label>
+
               <!-- VIEW QUESTIONS -->
               <a class="btn btn-primary btn-sm"
                 data-bs-toggle="tooltip"
@@ -42,7 +55,7 @@
             href="javascript:void(0)"
             {% if chapter.completed %}
               aria-disabled="true" tabindex="-1"
-            {% endif %}> 
+            {% endif %}>
             <i class="bi bi-pencil"></i>
           </a>
 
@@ -106,6 +119,73 @@
           </div>
         </div>
       </div>
+
+<!-- Choose Question Method Modal -->
+<div class="modal fade" id="ChooseQuestionMethodModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Add Questions</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="mb-3">Choose how you want to add questions for this chapter.</p>
+
+        <div class="d-grid gap-2">
+          <button type="button" class="btn btn-primary" id="btnChooseManual">
+            <i class="bi bi-pencil-square"></i> Add manually
+          </button>
+
+          <button type="button" class="btn btn-outline-success" id="btnChooseAI">
+            <i class="bi bi-robot"></i> Generate with AI
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!-- AI Generate Questions Modal -->
+<div class="modal fade" id="AIGenerateQuestionsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">AI Question Generation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="aiGenerateForm" novalidate>
+        <div class="modal-body">
+
+          <div class="mb-3">
+            <label for="aiQuestionCount" class="form-label">Number of questions</label>
+            <input type="number"
+                   class="form-control"
+                   id="aiQuestionCount"
+                   min="1"
+                   max="50"
+                   value="5"
+                   required>
+            <div class="form-text">Enter a number from 1 to 50.</div>
+            <div class="invalid-feedback">Please enter a valid number of questions.</div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-magic"></i> Generate
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
 <!-- Add Questions Modal -->
 <div class="modal fade" id="AddQuestionsModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">

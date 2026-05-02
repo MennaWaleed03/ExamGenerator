@@ -104,7 +104,9 @@ class QuestionEditModel(BaseModel):
     content:str
     choices:Annotated[List[ChoicesModel],Field(min_length=3,max_length=3)]
 
-
+class AIGenerateQuestionsRequest(BaseModel):
+    questions_num: int
+    
 class ExamDetailsRequestModel(BaseModel):
     questions_per_chapter:int
     difficult_questions:int

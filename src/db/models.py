@@ -55,7 +55,9 @@ class Chapter(Base):
     id= Column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4,index=True)
     course_id = Column(UUID, ForeignKey("courses.id"), nullable=False)
     chapter_number = Column(Integer,nullable=False)
-   
+    file_path=Column(String,nullable=True)
+
+
     created_at= Column( DateTime(timezone=True),
         server_default=func.now())
     updated_at= Column( DateTime(timezone=True),

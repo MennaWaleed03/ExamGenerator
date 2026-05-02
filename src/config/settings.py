@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRY: int
     ACCESS_MAX_AGE : int
     REFRESH_MAX_AGE : int
+    GEMINI_API_KEY: str
+    UPLOAD_PATH: str
 
 
     model_config=SettingsConfigDict(
@@ -17,3 +19,5 @@ class Settings(BaseSettings):
 
 def get_settings():
     return Settings()
+x=get_settings()
+print(x.GEMINI_API_KEY)
